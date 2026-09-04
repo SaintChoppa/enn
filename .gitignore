@@ -1,0 +1,29 @@
+# ── Dependencias ──────────────────────────────────────────────
+node_modules/
+
+# ── Artefactos de compilación Rust/Tauri ──────────────────────
+src-tauri/target/
+target/
+
+# ── Artefactos de distribución ────────────────────────────────
+*.exe
+!src-tauri/target/**/*.exe
+*.msi
+*.dmg
+
+# ── Configuración local ───────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+
+# ── Registros y temporales ────────────────────────────────────
+*.log
+*.tmp
+.env
+.env.local
+
+# ── Data de usuario generada en ejecución ─────────────────────
+
+# -- Generados por tauri-Build ------
+src-tauri/gen/
+
