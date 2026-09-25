@@ -5,18 +5,19 @@ created: 2026-09-25
 updated: 2026-09-25
 ---
 
-> [!success] Progreso de esta sesión (6 commits, todos compilados y con tests en verde)
-> - ✅ Descarga de **listas completas** de YouTube/SoundCloud/Bandcamp (antes forzaba `--no-playlist`)
-> - ✅ El proyecto **no compilaba fuera de Windows** (`crate::exclusive` sin `cfg`) — arreglado, más separador de rutas y búsqueda en PATH de yt-dlp
-> - ✅ CI ahora corre en `[windows, ubuntu, macos]` (antes solo Windows)
-> - ✅ Badge de calidad de la fuente (formato/Hz/bits/kbps) en el reproductor
-> - ✅ Favoritos por pista (★, filtro `favorito:`, sobreviven a un refresh)
-> - ✅ **Bug real encontrado y arreglado**: `Library::refresh()` borraba todo el análisis de ReplayGain en cada refresh — ahora se preserva
-> - ✅ Limpieza de `tags_write` (quitado un `unreachable!()` innecesario)
-> - 🔍 Auditados los ~120 `.unwrap()` reportados abajo: casi todos son `Mutex::lock().unwrap()` (idiomático, solo truena si un hilo ya murió con el lock) o están en tests — no hacía falta tocarlos
-> - 🔍 Correcciones a mis propias suposiciones iniciales: drag&drop de archivos **ya estaba implementado**, `media_keys.rs` **ya es cross-platform** (usa `souvlaki` genérico), y el resampler **ya hace bypass exacto** cuando la tasa coincide — ninguno necesitaba trabajo
+> [!success] Progreso de esta sesión (8 commits, todos compilados y con tests en verde)
+> - ✅ Logging estructurado con niveles (`ENN_LOG=debug|warn|error`), incluida la ruta `dbg_log` desde la UI
+> - ✅ Errores de yt-dlp/ffmpeg traducidos a mensajes claros en español (privado/borrado, restricción de edad, 403/429, sin red, sin espacio) en vez de stderr crudo
+> - ✅ **Recuperación de dispositivo de audio desconectado en caliente** (Bluetooth que se apaga, USB desenchufado): un supervisor reabre el stream con reintentos y backoff, con aviso al usuario — antes la reproducción se congelaba en silencio para siempre, sin recuperación ni aviso
+> - 🐛 De paso, un bug latente en `exclusive.rs`: el bucle de render confundía "el llamador cerró el canal" con `try_recv()==Ok`, que nunca ocurre así (el cierre real es un *Disconnected*) — un fallo real de hardware en modo exclusivo se camuflaba como cierre limpio
+> - 🔒 **Vulnerabilidad real corregida**: una "URL" de descarga como `--exec=touch pwned` pasaba el único filtro que había (`contains("://")`) y yt-dlp la interpretaba como opción real — su `--exec` ejecuta shell arbitrario tras la descarga. Ahora se exige prefijo `http(s)://` literal sin espacios, en el comando de Tauri y de nuevo dentro de `enqueue()`
+> - 🐛 **Bug real en `build.rs`**: descargaba yt-dlp desde una URL que devuelve 404 (confundía la convención de sidecar de Tauri con el nombre real del asset en GitHub) — cualquier clon nuevo del repo se habría quedado sin yt-dlp hasta notarlo a mano. Corregido y verificado con una descarga real en esta sesión
+> - ✅ Verificación de checksum (SHA-256 contra `SHA2-256SUMS` que publica el propio yt-dlp) para el binario descargado en `build.rs` — ffmpeg (gyan.dev) no tiene un hash fetcheable equivalente, así que se documentó por qué no se fingió esa verificación
+> - ✅ Escaneo de biblioteca paralelizado con `rayon` (`scan_into`/`refresh`/`probe_many`) — cada archivo se decodifica de forma independiente, así que bibliotecas grandes ya no escanean uno por uno
+> - ✅ Cobertura de tests para el remuestreador (antes cero): bypass exacto fijado como regresión, más un test de FFT que confirma que un tono de 1 kHz a 44.1→48 kHz conserva su frecuencia sin distorsión armónica relevante
+> - 🔍 Revisados los permisos de `capabilities/default.json`: ya es mínimo (`core:default` + `dialog:default`, sin fs/shell genéricos) — no hacía falta tocar nada
 >
-> Pendiente: todo lo demás marcado abajo. La sección 14 (Enn Server + Docker/Ansible/Terraform) no se ha empezado — es la pieza más grande y la dejé para después de asegurar la app de escritorio, tal como la planteaste ("luego" el despliegue).
+> Pendiente: el resto de lo marcado abajo. Lo más grande sin empezar sigue siendo la sección 14 (Enn Server + Docker/Ansible/Terraform/AWS) y la salida de audio nativa para Linux/macOS (sección 2) — ambas necesitan, respectivamente, credenciales/infra que no tengo en este entorno y una máquina real no-Windows para validar antes de dar por buena ninguna implementación.
 
 # 🎵 Enn — Roadmap hacia "reproductor definitivo"
 
@@ -107,22 +108,22 @@ updated: 2026-09-25
 
 - [x] ~~🔴 `L` Auditar los ~120 `.unwrap()`~~ — ✅ **auditado, no hacía falta tocar la mayoría**: son `Mutex::lock().unwrap()` (idiomático) o viven en `#[cfg(test)]`. Arreglé el único caso real (`tags_write` en `lib.rs`, `unreachable!()` innecesario).
 - [x] 🟡 `S` `player.rs:1217` `panic!(...)` — ✅ confirmado: está dentro de `#[cfg(test)] mod tests` (línea 1030), no alcanzable en producción.
-- [ ] 🟡 `M` Recuperación ante dispositivo de audio desconectado en caliente (auriculares Bluetooth que se apagan a mitad de reproducción) — hoy no vi lógica de reconexión automática de dispositivo.
-- [ ] 🟡 `S` Mensajes de error de usuario más claros cuando yt-dlp/ffmpeg fallan (hoy exponen el stderr crudo del proceso — bien para debug, mal para UX final).
-- [ ] 🟢 `S` Logging estructurado con niveles (hoy `log_msg` parece un log plano) — útil para diagnosticar bugs reportados sin pedir "manda el log completo".
+- [x] 🟡 `M` Recuperación ante dispositivo de audio desconectado en caliente — ✅ hecho: supervisor con reintentos/backoff en `player.rs`, aviso al usuario vía `get_state().audio_error`.
+- [x] 🟡 `S` Mensajes de error de usuario más claros cuando yt-dlp/ffmpeg fallan — ✅ hecho: `friendly_download_error()` traduce las causas más comunes a español claro.
+- [x] 🟢 `S` Logging estructurado con niveles — ✅ hecho: `ENN_LOG=debug|warn|error`, niveles reales en los call sites, `dbg_log` con nivel opcional desde la UI.
 
 ## 9. ⚡ Rendimiento
 
-- [ ] 🟡 `M` Perfilar el escaneo de biblioteca en colecciones grandes (10k+ pistas) — Symphonia + lofty por archivo puede ser lento; evaluar paralelizar con `rayon` si no se hace ya.
+- [x] 🟡 `M` Perfilar el escaneo de biblioteca en colecciones grandes (10k+ pistas) — ✅ hecho: `scan_into`/`refresh`/`probe_many` ahora usan `rayon::par_iter` (cada archivo es independiente, sin estado compartido).
 - [ ] 🟢 `S` Revisar que el polling de estado cada 250ms (mencionado en README) no cause renders innecesarios en `app.js` cuando no hay cambios reales.
 - [ ] 🟡 `S` Caché de biblioteca en formato binario (ej. `bincode`) en vez de JSON si `library.json` crece mucho con bibliotecas grandes — mide primero, no optimices a ciegas.
 - [ ] 🟢 `S` Lazy-loading de carátulas en listas largas (si no está ya, para no decodificar 500 imágenes de golpe al abrir la vista de álbumes).
 
 ## 10. 🧪 Testing y CI/CD
 
-- [ ] 🔴 `M` Matriz de CI cross-platform (ver punto 2) — hoy `cargo test` solo corre en Windows, así que un bug de Linux/macOS nunca se detecta antes de release.
+- [x] 🔴 `M` Matriz de CI cross-platform (ver punto 2) — ✅ ya hecho en la sesión anterior (`[windows, ubuntu, macos]`), sin verificar aún en un run real de GH Actions.
 - [ ] 🟡 `S` Tests de integración para el flujo completo de descarga (mock del proceso yt-dlp, no solo `classify_line` como hoy en `downloader.rs`).
-- [ ] 🟢 `S` Test de regresión para el resampler (verificar THD/respuesta en frecuencia con una señal conocida) — relevante si el pitch es "audio de alta fidelidad" en el portafolio.
+- [x] 🟢 `S` Test de regresión para el resampler — ✅ hecho: bypass exacto fijado + test de FFT (1 kHz, 44.1→48 kHz) que verifica frecuencia y THD acotado.
 - [ ] 🟢 `S` Linting de UI (`app.js`) más allá de `node --check` — considerar ESLint básico.
 
 ## 11. 📦 Empaquetado y distribución
@@ -134,9 +135,9 @@ updated: 2026-09-25
 
 ## 12. 🔐 Seguridad
 
-- [ ] 🟡 `M` Sandboxing/validación de URLs antes de pasarlas a yt-dlp (evitar inyección de flags vía URL maliciosa — revisar cómo se construyen los `Command::new` en `downloader.rs`).
-- [ ] 🟢 `S` Verificar checksum de los binarios sidecar (`ffmpeg`, `yt-dlp`) descargados en `build.rs` contra un hash conocido, para detectar manipulación en el download.
-- [ ] 🟢 `S` Revisar permisos de Tauri en `capabilities/default.json` — principio de mínimo privilegio (¿todos los permisos ahí son realmente necesarios?).
+- [x] 🟡 `M` Sandboxing/validación de URLs antes de pasarlas a yt-dlp — ✅ hecho, y era un hueco real: `is_valid_download_url()` exige `http(s)://` literal; sin ella, `--exec=...` como "URL" ejecutaba shell arbitrario vía yt-dlp.
+- [x] 🟢 `S` Verificar checksum de los binarios sidecar — ✅ hecho para yt-dlp (contra su propio `SHA2-256SUMS`); ffmpeg (gyan.dev) no publica un hash fetcheable equivalente, así que se dejó explícitamente sin verificar en vez de fingirlo.
+- [x] 🟢 `S` Revisar permisos de Tauri en `capabilities/default.json` — ✅ revisado: ya es mínimo (`core:default` + `dialog:default`, sin fs/shell genéricos), no hacía falta tocar nada.
 
 ## 13. 📄 Documentación y presentación como portafolio
 
