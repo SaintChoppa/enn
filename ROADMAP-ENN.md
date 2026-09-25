@@ -1,0 +1,182 @@
+---
+tags: [enn, roadmap, portfolio, audio, tauri, rust]
+status: en-progreso
+created: 2026-09-25
+updated: 2026-09-25
+---
+
+> [!success] Progreso de esta sesión (6 commits, todos compilados y con tests en verde)
+> - ✅ Descarga de **listas completas** de YouTube/SoundCloud/Bandcamp (antes forzaba `--no-playlist`)
+> - ✅ El proyecto **no compilaba fuera de Windows** (`crate::exclusive` sin `cfg`) — arreglado, más separador de rutas y búsqueda en PATH de yt-dlp
+> - ✅ CI ahora corre en `[windows, ubuntu, macos]` (antes solo Windows)
+> - ✅ Badge de calidad de la fuente (formato/Hz/bits/kbps) en el reproductor
+> - ✅ Favoritos por pista (★, filtro `favorito:`, sobreviven a un refresh)
+> - ✅ **Bug real encontrado y arreglado**: `Library::refresh()` borraba todo el análisis de ReplayGain en cada refresh — ahora se preserva
+> - ✅ Limpieza de `tags_write` (quitado un `unreachable!()` innecesario)
+> - 🔍 Auditados los ~120 `.unwrap()` reportados abajo: casi todos son `Mutex::lock().unwrap()` (idiomático, solo truena si un hilo ya murió con el lock) o están en tests — no hacía falta tocarlos
+> - 🔍 Correcciones a mis propias suposiciones iniciales: drag&drop de archivos **ya estaba implementado**, `media_keys.rs` **ya es cross-platform** (usa `souvlaki` genérico), y el resampler **ya hace bypass exacto** cuando la tasa coincide — ninguno necesitaba trabajo
+>
+> Pendiente: todo lo demás marcado abajo. La sección 14 (Enn Server + Docker/Ansible/Terraform) no se ha empezado — es la pieza más grande y la dejé para después de asegurar la app de escritorio, tal como la planteaste ("luego" el despliegue).
+
+# 🎵 Enn — Roadmap hacia "reproductor definitivo"
+
+> [!info] Cómo usar este documento
+> Cada bullet es un ítem independiente con checkbox. Márcalos como quieras (✅ aprobado / ❌ no / 💬 con dudas) y me los devuelves — **no toco nada hasta que apruebes**. Prioridad: 🔴 alta · 🟡 media · 🟢 baja. Esfuerzo estimado: `S` (horas), `M` (1-2 sesiones), `L` (varios días/feature grande).
+>
+> Todo lo que aparece aquí está basado en una lectura real del código actual (`src-tauri/src/*.rs`, `ui/app.js`, `.github/workflows/ci.yml`), no son suposiciones genéricas.
+
+---
+
+## 0. ⚠️ Antes de nada — expectativas correctas sobre "Spotify"
+
+> [!warning] Léelo antes de aprobar la sección de importación
+> No es técnicamente posible (ni legal) reproducir el catálogo con DRM de Spotify dentro de una app de terceros sin ser Spotify — su streaming está cifrado y ligado a su SDK oficial, que exige cuenta **Premium** y solo permite reproducir *dentro* de un flujo controlado por ellos, no descargar ni mezclar con tu propio motor de audio.
+>
+> Lo que **sí es real y legítimo**:
+> - [ ] 🔴 `S` Importar una playlist de Spotify **por metadatos** (nombre, artista, álbum) vía la Web API pública de Spotify (necesitas crear una app gratuita en su Developer Dashboard — te guío en el setup, requiere tu client-id/secret).
+> - [ ] 🔴 `M` Con esos metadatos, buscar automáticamente la mejor coincidencia en YouTube/SoundCloud vía yt-dlp y ofrecer descargarla a tu biblioteca local (misma lógica que ya usas para descargas individuales).
+> - [ ] 🟢 `S` Modo alternativo: pegar el link de la playlist de Spotify → mostrar la lista de coincidencias encontradas antes de descargar, para que confirmes track por track (evita descargar basura por nombres ambiguos).
+>
+> Esto te da "listas de Spotify funcionando en Enn" de forma 100% legal y sin depender de su SDK. Lo dejo aparte para que apruebes con esa aclaración clara.
+
+---
+
+## 1. ⬇️ Importación, descarga y "guardar mis canciones"
+
+- [x] 🔴 `S` **Arreglar YouTube playlists ya mismo** — ✅ hecho: `resolve_entries()` expande la URL en una tarea por vídeo antes de encolar, reutilizando el progreso/cancelación existentes por tarea.
+- [ ] 🔴 `M` Soporte de importación de playlists de Spotify (ver sección 0).
+- [ ] 🟡 `M` Importar playlists de YouTube Music / Apple Music (Apple Music vía export de biblioteca; YT Music comparte backend con YouTube así que es casi gratis una vez resuelto lo anterior).
+- [ ] 🟡 `S` Detección de duplicados al descargar (si el título/artista ya existe en biblioteca, avisar antes de descargar de nuevo).
+- [ ] 🟢 `S` Normalización automática post-descarga: aplicar ReplayGain al vuelo a lo recién descargado en vez de esperar al escaneo manual.
+- [ ] 🟡 `M` Cola de descargas persistente entre reinicios (si cierras Enn a mitad de una descarga larga, hoy se pierde).
+- [ ] 🟢 `S` Elegir calidad de descarga (bitrate/formato) por descarga individual, no solo un formato global.
+
+## 2. 🌍 Multiplataforma real (hoy es Windows-only de facto)
+
+- [ ] 🔴 `L` **Linux**: `exclusive.rs` está `#![cfg(target_os = "windows")]` completo (WASAPI exclusivo no existe en Linux) — implementar salida ALSA/PipeWire de baja latencia equivalente vía `cpal` (ya está la dependencia) para no perder la promesa de "bit-perfect" fuera de Windows.
+- [x] ~~🔴 `M` Linux: `media_keys.rs` solo Windows~~ — ✅ **ya estaba bien**: usa `souvlaki` genérico, solo el HWND está gateado a Windows. El comentario "MPRIS-ready" del código era correcto.
+- [x] 🟡 `S` `reveal_in_folder` — ✅ agregada la rama macOS (`open -R`).
+- [ ] 🔴 `L` **macOS**: validar/CoreAudio vía cpal, iconos `.icns`, firma y notarización para distribución fuera de la App Store.
+- [x] 🔴 `M` Extender `.github/workflows/ci.yml` a matriz `[windows-latest, ubuntu-latest, macos-latest]` — ✅ hecho (más el compile-fix de `exclusive.rs` que lo bloqueaba). Sin verificar en un run real de GH Actions todavía.
+- [ ] 🟡 `M` Atajos globales (`ctrl+alt+p/←/→/s/m`) — verificar que `tauri-plugin-global-shortcut` funcione igual en Linux (Wayland tiene restricciones distintas a X11) y documentar el fallback.
+- [ ] 🟢 `S` Rutas de configuración por plataforma: hoy usa `app_config_dir()` de Tauri (ya es cross-platform), pero el "modo portable" (`Enn.portable` junto al .exe) es un concepto Windows — decidir equivalente en Linux/macOS o documentarlo como Windows-only conscientemente.
+
+## 3. 📦 Formatos de audio — cobertura y calidad
+
+- [ ] 🟡 `S` Symphonia ya cubre MP3/FLAC/WAV/AIFF/OGG/Opus/M4A/AAC/ALAC — añadir **APE (Monkey's Audio)** y **WavPack** si Symphonia los soporta en la versión fijada (`=0.5.5`), o evaluar actualizar la dependencia.
+- [ ] 🟢 `S` DSD/DSF (audiófilos de verdad lo piden) — evaluar viabilidad vía librería externa; es un formato de nicho, dejar como "nice to have" explícito.
+- [x] 🔴 `M` Exponer en la UI la **tasa de bits/profundidad real** — ✅ hecho: badge junto al título con formato/Hz/bits o kbps.
+- [x] ~~🟡 `M` Verificar bypass del resampler~~ — ✅ **ya estaba bien**: `dsp.rs:362-367` copia directa sin filtrar cuando `ratio≈1`.
+- [ ] 🟢 `S` Dither opcional al reducir bit-depth (para salidas de 16-bit desde fuentes de mayor profundidad).
+
+## 4. 📚 Biblioteca, indexación y organización
+
+- [ ] 🔴 `M` Escaneo incremental más inteligente: detectar archivos movidos/renombrados sin re-analizar todo (hoy `scan_into`/`refresh` — revisar si hace diff por hash o solo por ruta).
+- [ ] 🟡 `M` Vistas adicionales: por **año**, **género**, **carpeta física**, y "compilaciones" (detectar Various Artists correctamente en vez de romper la agrupación por álbum).
+- [ ] 🔴 `M` **Smart playlists** basadas en reglas (ej: "rating > 4 AND género = Rock AND agregado en los últimos 30 días") — hoy solo hay M3U estático y playlists manuales.
+- [x] 🟡 `S` Sistema de **favoritos** por pista — ✅ hecho (★, filtro `favorito:`, campo `favorite: bool` con serde default). Rating numérico 1-5 queda pendiente si lo prefieres sobre el booleano.
+- [ ] 🟡 `M` Editor de etiquetas por lote (`tags_write` en `lib.rs` hoy es pista por pista) — selección múltiple → editar artista/álbum/género de golpe.
+- [ ] 🟢 `S` Auto-completado de artista/álbum al escribir en el editor de etiquetas (usando lo ya indexado en biblioteca).
+- [ ] 🟡 `M` Detección de biblioteca duplicada (mismo archivo en dos carpetas indexadas, o mismo track en distinta calidad) con opción de "quedarme con la mejor versión".
+- [ ] 🟢 `S` Ordenar biblioteca por "más escuchado recientemente" además de "más reproducido total" (ya existe historial, falta esta vista derivada).
+
+## 5. 🔎 Metadatos enriquecidos (nivel Spotify/Plex)
+
+- [ ] 🟡 `L` Integración opcional con **MusicBrainz** para completar metadatos faltantes (año, género, MBID) cuando el archivo trae tags pobres.
+- [ ] 🟡 `M` Descarga automática de carátulas faltantes desde MusicBrainz Cover Art Archive cuando no hay arte embebido (hoy `art.rs` solo extrae lo embebido).
+- [ ] 🟢 `M` Letras de canciones (embebidas si existen en el tag `USLT`/`LYRICS`, o buscadas y cacheadas localmente).
+- [ ] 🟢 `S` Biografía/artista destacado en la vista de artista (opcional, requiere API externa — dejar como toggle apagado por defecto para respetar el "sin telemetría/sin nube" del README).
+
+## 6. 🎨 UI/UX
+
+- [ ] 🟡 `M` Mini-reproductor / "mini mode" — confirmar que ya existe (README lo menciona) y pulir: siempre-visible-encima, tamaño configurable.
+- [x] ~~🟡 `S` Drag & drop de archivos~~ — ✅ **ya estaba implementado** (`setupDragDrop()` en `app.js`).
+- [ ] 🟢 `S` Temas de color personalizables más allá de auto claro/oscuro (acento de color, alto contraste).
+- [ ] 🟡 `M` Vista "Ahora suena" a pantalla completa con carátula grande + espectro + letras (aprovechando el analizador de 48 bandas ya implementado).
+- [ ] 🟢 `S` Animaciones de transición entre vistas más pulidas (hoy `styles.css` tiene +758 líneas nuevas — revisar consistencia general del sistema visual, no solo agregar).
+- [ ] 🟡 `S` Onboarding de primera ejecución (hoy quien abre Enn por primera vez ve una biblioteca vacía sin guía — un flujo "añade tu primera carpeta / importa tu primera playlist").
+
+## 7. ⌨️ Accesibilidad y atajos
+
+- [ ] 🟡 `M` Navegación completa por teclado en la lista de biblioteca (flechas, Enter para reproducir, Space para pausar) — confirmar cobertura actual en `app.js`.
+- [ ] 🟡 `S` Atributos ARIA en los controles principales (play/pause/volumen/seek) — un reproductor "framework-free" corre más riesgo de saltarse esto que uno con librería de UI.
+- [ ] 🟢 `S` Tamaño de fuente / densidad de lista ajustable (accesibilidad visual).
+- [ ] 🟢 `S` Soporte de lector de pantalla básico para los controles de transporte.
+
+## 8. 🛡️ Robustez y manejo de errores (deuda técnica real encontrada)
+
+- [x] ~~🔴 `L` Auditar los ~120 `.unwrap()`~~ — ✅ **auditado, no hacía falta tocar la mayoría**: son `Mutex::lock().unwrap()` (idiomático) o viven en `#[cfg(test)]`. Arreglé el único caso real (`tags_write` en `lib.rs`, `unreachable!()` innecesario).
+- [x] 🟡 `S` `player.rs:1217` `panic!(...)` — ✅ confirmado: está dentro de `#[cfg(test)] mod tests` (línea 1030), no alcanzable en producción.
+- [ ] 🟡 `M` Recuperación ante dispositivo de audio desconectado en caliente (auriculares Bluetooth que se apagan a mitad de reproducción) — hoy no vi lógica de reconexión automática de dispositivo.
+- [ ] 🟡 `S` Mensajes de error de usuario más claros cuando yt-dlp/ffmpeg fallan (hoy exponen el stderr crudo del proceso — bien para debug, mal para UX final).
+- [ ] 🟢 `S` Logging estructurado con niveles (hoy `log_msg` parece un log plano) — útil para diagnosticar bugs reportados sin pedir "manda el log completo".
+
+## 9. ⚡ Rendimiento
+
+- [ ] 🟡 `M` Perfilar el escaneo de biblioteca en colecciones grandes (10k+ pistas) — Symphonia + lofty por archivo puede ser lento; evaluar paralelizar con `rayon` si no se hace ya.
+- [ ] 🟢 `S` Revisar que el polling de estado cada 250ms (mencionado en README) no cause renders innecesarios en `app.js` cuando no hay cambios reales.
+- [ ] 🟡 `S` Caché de biblioteca en formato binario (ej. `bincode`) en vez de JSON si `library.json` crece mucho con bibliotecas grandes — mide primero, no optimices a ciegas.
+- [ ] 🟢 `S` Lazy-loading de carátulas en listas largas (si no está ya, para no decodificar 500 imágenes de golpe al abrir la vista de álbumes).
+
+## 10. 🧪 Testing y CI/CD
+
+- [ ] 🔴 `M` Matriz de CI cross-platform (ver punto 2) — hoy `cargo test` solo corre en Windows, así que un bug de Linux/macOS nunca se detecta antes de release.
+- [ ] 🟡 `S` Tests de integración para el flujo completo de descarga (mock del proceso yt-dlp, no solo `classify_line` como hoy en `downloader.rs`).
+- [ ] 🟢 `S` Test de regresión para el resampler (verificar THD/respuesta en frecuencia con una señal conocida) — relevante si el pitch es "audio de alta fidelidad" en el portafolio.
+- [ ] 🟢 `S` Linting de UI (`app.js`) más allá de `node --check` — considerar ESLint básico.
+
+## 11. 📦 Empaquetado y distribución
+
+- [ ] 🟡 `M` Instalador Linux: `.AppImage` y/o paquete `.deb`/Flatpak.
+- [ ] 🟡 `M` Instalador macOS: `.dmg` firmado (requiere cuenta de desarrollador Apple — nota de costo/tiempo).
+- [ ] 🟢 `S` Auto-actualización dentro de la app (Tauri tiene plugin oficial de updater) en vez de reinstalar manualmente.
+- [ ] 🟢 `S` Página de releases con changelog generado (útil también de cara al portafolio: demuestra proceso de release serio).
+
+## 12. 🔐 Seguridad
+
+- [ ] 🟡 `M` Sandboxing/validación de URLs antes de pasarlas a yt-dlp (evitar inyección de flags vía URL maliciosa — revisar cómo se construyen los `Command::new` en `downloader.rs`).
+- [ ] 🟢 `S` Verificar checksum de los binarios sidecar (`ffmpeg`, `yt-dlp`) descargados en `build.rs` contra un hash conocido, para detectar manipulación en el download.
+- [ ] 🟢 `S` Revisar permisos de Tauri en `capabilities/default.json` — principio de mínimo privilegio (¿todos los permisos ahí son realmente necesarios?).
+
+## 13. 📄 Documentación y presentación como portafolio
+
+- [ ] 🟡 `S` Sección de **arquitectura con diagrama** más visual en el README (ya hay un diagrama ASCII — considerar uno más elaborado para GitHub).
+- [ ] 🟡 `S` `CONTRIBUTING.md` + issues templates — señal de proyecto serio para reclutadores.
+- [ ] 🟢 `S` Capturas/GIF de features clave (ahora mismo solo hay una imagen estática `docs/enn-ui.png`).
+- [ ] 🟢 `S` Sección "decisiones de diseño" explicando por qué Rust+Tauri sobre Electron, por qué motor propio de DSP en vez de una librería — esto es oro en entrevistas técnicas.
+
+---
+
+## 14. ☁️ Despliegue en la nube — práctica de DevOps (Docker + Ansible + Terraform + AWS)
+
+> [!note] Enn es una app de escritorio nativa — no se "despliega" en AWS tal cual. Para que el ejercicio de nube tenga sentido real (y no sea cosmético), propongo construir un **componente servidor opcional: "Enn Server"** — un modo headless que expone tu biblioteca para streaming remoto (estilo Jellyfin/Navidrome pero ligero y hecho por ti). Esto te da:
+> - Una razón real para contenedores, Ansible y Terraform.
+> - Una feature legítima para el producto: escuchar tu biblioteca desde el navegador/móvil cuando no estás en tu PC.
+> - Una pieza de portafolio de infraestructura, no un despliegue de relleno.
+
+- [ ] 🟡 `L` Diseñar **Enn Server**: reutiliza `library.rs`/`decode.rs`/`dsp.rs` (ya está en Rust, se puede compartir crate) tras una API HTTP (Axum/Actix) que sirve streaming transcodeado + metadatos + carátulas.
+- [ ] 🟡 `M` **Dockerfile** multi-stage para Enn Server (build de Rust + imagen final mínima, ej. `distroless` o `alpine`).
+- [ ] 🟡 `M` `docker-compose.yml` para levantar Enn Server + un volumen de biblioteca local en un solo comando (práctica de containerización real).
+- [ ] 🟡 `M` **Terraform**: módulo que provisiona una instancia EC2 (o Lightsail, más barato para práctica), su security group (solo puertos necesarios), y un volumen EBS para la biblioteca — como ejercicio de IaC declarativo.
+- [ ] 🟡 `M` **Ansible**: playbook que instala Docker en la instancia provisionada por Terraform, despliega el contenedor de Enn Server, configura logs y reinicio automático (systemd/docker restart policy) — separa claramente "provisión" (Terraform) de "configuración" (Ansible), que es justo la práctica que buscas.
+- [ ] 🟢 `S` HTTPS con Let's Encrypt/Caddy delante del servidor (aprender a manejar certificados en un ejercicio real).
+- [ ] 🟢 `S` CI/CD que construya y publique la imagen Docker a un registry (Docker Hub o ECR) en cada tag de versión.
+- [ ] 🟢 `S` Documentar el costo estimado mensual de la infra (útil mostrar consciencia de costos en entrevistas de nube).
+
+---
+
+## 📋 Resumen de aprobación rápida
+
+Si quieres aprobar por bloques enteros en vez de ítem por ítem, dime cuáles de estas 14 secciones apruebas tal cual y cuáles quieres que ajuste antes de empezar:
+
+1. Importación/descarga (Spotify+YouTube) — 0 y 1
+2. Multiplataforma — 2
+3. Formatos/calidad — 3
+4. Biblioteca/organización — 4 y 5
+5. UI/UX y accesibilidad — 6 y 7
+6. Robustez/rendimiento/testing (deuda técnica) — 8, 9, 10
+7. Empaquetado/seguridad/docs — 11, 12, 13
+8. Enn Server + nube (Docker/Ansible/Terraform/AWS) — 14
+
+> [!tip] Sobre trabajar "en automático hasta las 8am"
+> En cuanto apruebes bloques, puedo encadenar el trabajo en una sesión larga sin pedirte confirmación en cada paso (commits incrementales, no un solo commit gigante). Dime hasta qué hora quieres que corra y si prefieres que pare para que revises en algún punto intermedio, o que siga sin interrupciones hasta el límite.
