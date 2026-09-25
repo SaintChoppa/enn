@@ -557,14 +557,18 @@ fn friendly_download_error(code: i32, stderr_out: &str) -> String {
             .collect::<Vec<_>>()
             .join(" | ")
     };
-    let reason = if low.contains("video unavailable") || low.contains("this video is unavailable")
-    {
+    let reason = if low.contains("video unavailable") || low.contains("this video is unavailable") {
         Some("el vídeo ya no está disponible (borrado o retirado por su autor)".to_string())
     } else if low.contains("private video") {
         Some("el vídeo es privado".to_string())
     } else if low.contains("sign in to confirm your age") || low.contains("age-restricted") {
-        Some("el vídeo tiene restricción de edad y yt-dlp no pudo saltarla sin iniciar sesión".to_string())
-    } else if low.contains("this video is not available") || low.contains("not available in your country") {
+        Some(
+            "el vídeo tiene restricción de edad y yt-dlp no pudo saltarla sin iniciar sesión"
+                .to_string(),
+        )
+    } else if low.contains("this video is not available")
+        || low.contains("not available in your country")
+    {
         Some("el vídeo no está disponible en tu región".to_string())
     } else if low.contains("http error 403") || low.contains("http error 429") {
         Some("el servidor rechazó la descarga (posible bloqueo temporal por demasiadas peticiones); espera un momento y reintenta".to_string())
@@ -578,7 +582,8 @@ fn friendly_download_error(code: i32, stderr_out: &str) -> String {
         Some("no queda espacio en el disco de destino".to_string())
     } else if low.contains("unsupported url") {
         Some("ese enlace no es de un sitio soportado por yt-dlp".to_string())
-    } else if low.contains("ffmpeg") && (low.contains("not found") || low.contains("no such file")) {
+    } else if low.contains("ffmpeg") && (low.contains("not found") || low.contains("no such file"))
+    {
         Some(
             "no se encontró ffmpeg para convertir el audio; instálalo (winget install ffmpeg) y vuelve a intentarlo"
                 .to_string(),
@@ -730,14 +735,22 @@ mod tests {
 
     #[test]
     fn friendly_error_recognizes_common_causes() {
-        assert!(friendly_download_error(1, "ERROR: [youtube] abc: Video unavailable")
-            .contains("ya no está disponible"));
-        assert!(friendly_download_error(1, "ERROR: Private video. Sign in if you've been invited")
-            .contains("privado"));
-        assert!(friendly_download_error(1, "urllib.error: HTTP Error 429: Too Many Requests")
-            .contains("bloqueo temporal"));
-        assert!(friendly_download_error(1, "socket.timeout: The read operation timed out")
-            .contains("no respondió a tiempo"));
+        assert!(
+            friendly_download_error(1, "ERROR: [youtube] abc: Video unavailable")
+                .contains("ya no está disponible")
+        );
+        assert!(
+            friendly_download_error(1, "ERROR: Private video. Sign in if you've been invited")
+                .contains("privado")
+        );
+        assert!(
+            friendly_download_error(1, "urllib.error: HTTP Error 429: Too Many Requests")
+                .contains("bloqueo temporal")
+        );
+        assert!(
+            friendly_download_error(1, "socket.timeout: The read operation timed out")
+                .contains("no respondió a tiempo")
+        );
     }
 
     #[test]

@@ -324,7 +324,11 @@ mod tests {
 
         let mut lib = Library::default();
         lib.scan_into(&dir.to_string_lossy(), &lib_json);
-        assert_eq!(lib.tracks.len(), 1, "debería haber indexado el wav de prueba");
+        assert_eq!(
+            lib.tracks.len(),
+            1,
+            "debería haber indexado el wav de prueba"
+        );
         {
             let t = lib.tracks.first_mut().unwrap();
             t.rg = Some(-14.2);
@@ -333,7 +337,11 @@ mod tests {
 
         lib.refresh(&lib_json);
 
-        assert_eq!(lib.tracks.len(), 1, "el refresh no debería duplicar ni perder la pista");
+        assert_eq!(
+            lib.tracks.len(),
+            1,
+            "el refresh no debería duplicar ni perder la pista"
+        );
         let t = &lib.tracks[0];
         assert_eq!(t.rg, Some(-14.2), "rg debería sobrevivir al refresh");
         assert!(t.favorite, "favorite debería sobrevivir al refresh");

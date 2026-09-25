@@ -97,33 +97,40 @@ fn verify_or_delete(path: &Path, asset_name: &str) {
     .is_err()
         || !sums_path.is_file()
     {
-        eprintln!("enn: no se pudo descargar SHA2-256SUMS, se omite la verificación de {asset_name}");
+        eprintln!(
+            "enn: no se pudo descargar SHA2-256SUMS, se omite la verificación de {asset_name}"
+        );
         return;
     }
-    let expected = std::fs::read_to_string(&sums_path)
-        .ok()
-        .and_then(|sums| {
-            sums.lines().find_map(|line| {
-                let mut parts = line.split_whitespace();
-                let hash = parts.next()?;
-                let name = parts.next()?.trim_start_matches('*');
-                (name == asset_name).then(|| hash.to_ascii_lowercase())
-            })
-        });
+    let expected = std::fs::read_to_string(&sums_path).ok().and_then(|sums| {
+        sums.lines().find_map(|line| {
+            let mut parts = line.split_whitespace();
+            let hash = parts.next()?;
+            let name = parts.next()?.trim_start_matches('*');
+            (name == asset_name).then(|| hash.to_ascii_lowercase())
+        })
+    });
     let _ = std::fs::remove_file(&sums_path);
     let Some(expected) = expected else {
         eprintln!("enn: {asset_name} no aparece en SHA2-256SUMS, se omite la verificación");
         return;
     };
 
-    let script = format!("(Get-FileHash -Algorithm SHA256 -Path '{}').Hash", path.display());
+    let script = format!(
+        "(Get-FileHash -Algorithm SHA256 -Path '{}').Hash",
+        path.display()
+    );
     let out = std::process::Command::new("powershell")
         .args(["-NoProfile", "-Command", &script])
         .output();
     let actual = match out {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_ascii_lowercase(),
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .trim()
+            .to_ascii_lowercase(),
         _ => {
-            eprintln!("enn: no se pudo calcular el hash local de {asset_name}, se omite la verificación");
+            eprintln!(
+                "enn: no se pudo calcular el hash local de {asset_name}, se omite la verificación"
+            );
             return;
         }
     };

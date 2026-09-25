@@ -198,9 +198,9 @@ pub fn analyze_lufs(path: &Path) -> Option<f64> {
     Some(integrated)
 }
 
-/// Referencia de reproducción de ReplayGain 2.0: −18 LUFS.
-/// La ganancia aplicada es `(-18 - lufs)` acotada a ±15 dB (la calcula la UI
-/// al reproducir, junto con la ganancia manual por pista).
+// Referencia de reproducción de ReplayGain 2.0: −18 LUFS.
+// La ganancia aplicada es `(-18 - lufs)` acotada a ±15 dB (la calcula la UI
+// al reproducir, junto con la ganancia manual por pista).
 
 #[cfg(test)]
 mod tests {

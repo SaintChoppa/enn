@@ -293,100 +293,6 @@ pub fn fft_magnitudes(input: &[f32], out: &mut [f32]) {
         *o = ((re[i] * re[i] + im[i] * im[i]).sqrt() / (half as f64)) as f32;
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fft_finds_sine_bin() {
-        const N: usize = 1024;
-        let bin = 40;
-        let input: Vec<f32> = (0..N)
-            .map(|i| (2.0 * std::f32::consts::PI * bin as f32 * i as f32 / N as f32).sin())
-            .collect();
-        let mut mags = vec![0.0f32; N / 2];
-        fft_magnitudes(&input, &mut mags);
-        let peak = mags
-            .iter()
-            .enumerate()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-            .map(|(i, _)| i)
-            .unwrap();
-        assert_eq!(peak, bin, "el pico debe caer en el bin del seno");
-        assert!(mags[bin] > 0.4, "magnitud del pico pequeña: {}", mags[bin]);
-    }
-
-    /// Ratio ≈ 1 debe copiar sin filtrar (dsp.rs:362-367): mismo bypass exacto
-    /// que se verificó a mano en la auditoría de la sesión anterior, ahora
-    /// fijado como regresión en vez de depender de que alguien lo recuerde.
-    #[test]
-    fn resampler_bypasses_when_rate_matches() {
-        let mut r = Resampler::new(48000.0, 48000.0);
-        let src: Vec<f32> = (0..64).map(|i| (i as f32 * 0.1).sin()).collect();
-        let mut out = vec![0.0f32; src.len()];
-        let (consumed, produced) = r.process(&src, src.len() / 2, &mut out, 0);
-        assert_eq!(consumed, src.len() / 2);
-        assert_eq!(produced, src.len() / 2);
-        assert_eq!(out, src, "en bypass la salida debe ser bit-exacta a la entrada");
-    }
-
-    /// Regresión de calidad del remuestreador: una señal de 1 kHz a 44.1 kHz
-    /// reamuestreada a 48 kHz debe conservar su frecuencia (el pico de la FFT
-    /// cae donde le corresponde a la nueva tasa) sin introducir distorsión
-    /// armónica ni imágenes de aliasing por encima de un umbral razonable.
-    #[test]
-    fn resampler_preserves_tone_frequency_44100_to_48000() {
-        let in_rate = 44100.0f64;
-        let out_rate = 48000.0f64;
-        let freq = 1000.0f64;
-        let n_in = 6000usize;
-        let mut src = vec![0.0f32; n_in * 2];
-        for i in 0..n_in {
-            let s = (2.0 * std::f64::consts::PI * freq * i as f64 / in_rate).sin() as f32;
-            src[i * 2] = s;
-            src[i * 2 + 1] = s;
-        }
-        let mut r = Resampler::new(in_rate, out_rate);
-        let mut out = vec![0.0f32; 4096 * 2];
-        let (_, produced) = r.process(&src, n_in, &mut out, 0);
-
-        const N: usize = 2048;
-        assert!(
-            produced >= N,
-            "se esperaban al menos {N} frames de salida, se produjeron {produced}"
-        );
-        let mono: Vec<f32> = (0..N).map(|i| out[i * 2]).collect();
-        let mut mags = vec![0.0f32; N / 2];
-        fft_magnitudes(&mono, &mut mags);
-
-        let peak = mags
-            .iter()
-            .enumerate()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-            .map(|(i, _)| i)
-            .unwrap();
-        let expected_bin = (freq * N as f64 / out_rate).round() as usize;
-        assert!(
-            peak.abs_diff(expected_bin) <= 1,
-            "pico en bin {peak}, se esperaba cerca de {expected_bin} (1 kHz a {out_rate} Hz)"
-        );
-
-        // THD/aliasing acotados: la energía fuera de un margen alrededor del
-        // tono (y del DC) debe quedar muy por debajo del propio tono.
-        let peak_mag = mags[peak] as f64;
-        let spurious: f64 = mags
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| *i > 3 && i.abs_diff(peak) > 2)
-            .map(|(_, m)| *m as f64)
-            .sum();
-        assert!(
-            spurious < 0.2 * peak_mag,
-            "demasiada energía espuria: {spurious:.4} frente a un pico de {peak_mag:.4}"
-        );
-    }
-}
 /// Remuestreador polifásico en streaming (estéreo): sinc con ventana Blackman,
 /// 64 taps y 256 fases precalculadas. Calidad muy superior al lineal (sin las
 /// imágenes que produce interpolar a saco) con coste de CPU despreciable.
@@ -499,4 +405,101 @@ fn build_table(in_rate: f64, out_rate: f64) -> Vec<f32> {
         }
     }
     t
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fft_finds_sine_bin() {
+        const N: usize = 1024;
+        let bin = 40;
+        let input: Vec<f32> = (0..N)
+            .map(|i| (2.0 * std::f32::consts::PI * bin as f32 * i as f32 / N as f32).sin())
+            .collect();
+        let mut mags = vec![0.0f32; N / 2];
+        fft_magnitudes(&input, &mut mags);
+        let peak = mags
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .map(|(i, _)| i)
+            .unwrap();
+        assert_eq!(peak, bin, "el pico debe caer en el bin del seno");
+        assert!(mags[bin] > 0.4, "magnitud del pico pequeña: {}", mags[bin]);
+    }
+
+    /// Ratio ≈ 1 debe copiar sin filtrar (dsp.rs:362-367): mismo bypass exacto
+    /// que se verificó a mano en la auditoría de la sesión anterior, ahora
+    /// fijado como regresión en vez de depender de que alguien lo recuerde.
+    #[test]
+    fn resampler_bypasses_when_rate_matches() {
+        let mut r = Resampler::new(48000.0, 48000.0);
+        let src: Vec<f32> = (0..64).map(|i| (i as f32 * 0.1).sin()).collect();
+        let mut out = vec![0.0f32; src.len()];
+        let (consumed, produced) = r.process(&src, src.len() / 2, &mut out, 0);
+        assert_eq!(consumed, src.len() / 2);
+        assert_eq!(produced, src.len() / 2);
+        assert_eq!(
+            out, src,
+            "en bypass la salida debe ser bit-exacta a la entrada"
+        );
+    }
+
+    /// Regresión de calidad del remuestreador: una señal de 1 kHz a 44.1 kHz
+    /// reamuestreada a 48 kHz debe conservar su frecuencia (el pico de la FFT
+    /// cae donde le corresponde a la nueva tasa) sin introducir distorsión
+    /// armónica ni imágenes de aliasing por encima de un umbral razonable.
+    #[test]
+    fn resampler_preserves_tone_frequency_44100_to_48000() {
+        let in_rate = 44100.0f64;
+        let out_rate = 48000.0f64;
+        let freq = 1000.0f64;
+        let n_in = 6000usize;
+        let mut src = vec![0.0f32; n_in * 2];
+        for i in 0..n_in {
+            let s = (2.0 * std::f64::consts::PI * freq * i as f64 / in_rate).sin() as f32;
+            src[i * 2] = s;
+            src[i * 2 + 1] = s;
+        }
+        let mut r = Resampler::new(in_rate, out_rate);
+        let mut out = vec![0.0f32; 4096 * 2];
+        let (_, produced) = r.process(&src, n_in, &mut out, 0);
+
+        const N: usize = 2048;
+        assert!(
+            produced >= N,
+            "se esperaban al menos {N} frames de salida, se produjeron {produced}"
+        );
+        let mono: Vec<f32> = (0..N).map(|i| out[i * 2]).collect();
+        let mut mags = vec![0.0f32; N / 2];
+        fft_magnitudes(&mono, &mut mags);
+
+        let peak = mags
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .map(|(i, _)| i)
+            .unwrap();
+        let expected_bin = (freq * N as f64 / out_rate).round() as usize;
+        assert!(
+            peak.abs_diff(expected_bin) <= 1,
+            "pico en bin {peak}, se esperaba cerca de {expected_bin} (1 kHz a {out_rate} Hz)"
+        );
+
+        // THD/aliasing acotados: la energía fuera de un margen alrededor del
+        // tono (y del DC) debe quedar muy por debajo del propio tono.
+        let peak_mag = mags[peak] as f64;
+        let spurious: f64 = mags
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i > 3 && i.abs_diff(peak) > 2)
+            .map(|(_, m)| *m as f64)
+            .sum();
+        assert!(
+            spurious < 0.2 * peak_mag,
+            "demasiada energía espuria: {spurious:.4} frente a un pico de {peak_mag:.4}"
+        );
+    }
 }
