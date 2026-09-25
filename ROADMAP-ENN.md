@@ -93,7 +93,7 @@ updated: 2026-09-25
 - [ ] 🟡 `M` Mini-reproductor / "mini mode" — confirmar que ya existe (README lo menciona) y pulir: siempre-visible-encima, tamaño configurable.
 - [x] ~~🟡 `S` Drag & drop de archivos~~ — ✅ **ya estaba implementado** (`setupDragDrop()` en `app.js`).
 - [ ] 🟢 `S` Temas de color personalizables más allá de auto claro/oscuro (acento de color, alto contraste).
-- [ ] 🟡 `M` Vista "Ahora suena" a pantalla completa con carátula grande + espectro + letras (aprovechando el analizador de 48 bandas ya implementado).
+- [x] 🟡 `M` Vista "Ahora suena" a pantalla completa con carátula grande + espectro — ✅ hecho (clic en el título del reproductor). Letras queda pendiente (necesita fuente de letras, fuera de alcance de esto).
 - [ ] 🟢 `S` Animaciones de transición entre vistas más pulidas (hoy `styles.css` tiene +758 líneas nuevas — revisar consistencia general del sistema visual, no solo agregar).
 - [ ] 🟡 `S` Onboarding de primera ejecución (hoy quien abre Enn por primera vez ve una biblioteca vacía sin guía — un flujo "añade tu primera carpeta / importa tu primera playlist").
 
