@@ -431,16 +431,14 @@ fn tags_write(
         return Err("el archivo no existe".into());
     }
     let mut tagged = lofty::read_from_path(p).map_err(|e| e.to_string())?;
-    if tagged.primary_tag_mut().is_none() && tagged.first_tag_mut().is_none() {
+    if tagged.primary_tag().is_none() && tagged.first_tag().is_none() {
         tagged.insert_tag(lofty::tag::Tag::new(lofty::tag::TagType::Id3v2));
     }
-    let has_tag = tagged.primary_tag_mut().is_some() || tagged.first_tag_mut().is_some();
-    let tag = if tagged.primary_tag_mut().is_some() {
-        tagged.primary_tag_mut().unwrap()
-    } else if has_tag {
-        tagged.first_tag_mut().unwrap()
-    } else {
-        unreachable!()
+    let tag = match tagged.primary_tag_mut() {
+        Some(t) => t,
+        None => tagged
+            .first_tag_mut()
+            .ok_or("no se pudo crear una etiqueta para este archivo")?,
     };
     for (k, v) in [
         (ItemKey::TrackTitle, title.as_str()),
