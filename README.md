@@ -79,6 +79,33 @@ cd src-tauri
 cargo test             # decode drain, audio smoke, LUFS analysis, FFT, yt-dlp line parsing
 ```
 
+## Design decisions
+
+**Rust + Tauri over Electron.** The audio engine runs on its own thread with
+a lock-free-ish command queue feeding the device callback — that callback
+has to return in microseconds or you get audible glitches. A GC'd runtime
+(Node/Electron's main process) makes that latency budget much harder to
+guarantee, and Electron ships a full Chromium + Node runtime per app (100+
+MB) for what is, here, a thin HTML/CSS/JS shell over native commands. Tauri
+gives the same "web UI" ergonomics with the OS's own webview and a
+native Rust backend doing the actual audio work.
+
+**A hand-rolled DSP engine instead of a library.** There isn't a mature,
+permissively-licensed Rust crate that does biquad EQ + polyphase resampling
++ ReplayGain 2.0 loudness analysis together the way this project needed them
+wired to a real-time callback; the alternative was several dependencies with
+different conventions and a lot of glue. The RBJ biquad cookbook and a
+windowed-sinc polyphase resampler are well-documented, small enough to
+reason about and test in isolation (see `dsp.rs`'s own regression tests),
+and mean the whole signal path from decode to device buffer is auditable in
+one place rather than spread across FFI boundaries.
+
+**No framework on the frontend.** The UI is a state machine polling a Rust
+backend every 250 ms and rendering diffs into the DOM by hand. At this
+scale (one window, a handful of views) a framework's reactivity model buys
+little and costs a build step, a bundle, and a dependency tree — plain
+functions over `document.getElementById` stay simpler to read end to end.
+
 ## Roadmap
 
 Linux port (ALSA/PipeWire + MPRIS), overlapped crossfade and more — tracked in the project notes.
