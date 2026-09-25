@@ -657,6 +657,18 @@ fn get_state(app: tauri::AppHandle) -> serde_json::Value {
         "artist": core.cur.as_ref().map(|t| t.artist.clone()).unwrap_or_default(),
         "pos": core.cur.as_ref().map(|t| t.pos_sec).unwrap_or(0.0),
         "dur": core.cur.as_ref().and_then(|t| t.dur),
+        // calidad de la fuente (no del dispositivo de salida): tasa y
+        // profundidad nativas del archivo, más una tasa de bits media
+        // aproximada a partir del tamaño en disco — útil para lossy sin
+        // bitrate declarado (VBR). None cuando no aplica (p. ej. streams
+        // sin duración conocida).
+        "sample_rate": core.cur.as_ref().map(|t| t.dec.sample_rate),
+        "bits_per_sample": core.cur.as_ref().and_then(|t| t.dec.bits_per_sample),
+        "bitrate_kbps": core.cur.as_ref().and_then(|t| {
+            let dur = t.dur.filter(|d| *d > 0.0)?;
+            let bytes = std::fs::metadata(&t.path).ok()?.len();
+            Some(((bytes as f64 * 8.0) / dur / 1000.0).round() as u32)
+        }),
         "volume": core.master,
         "balance": core.balance,
         "eq": core.eq.bands_db,

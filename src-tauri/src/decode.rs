@@ -35,6 +35,9 @@ pub struct Decoder {
     track_id: u32,
     pub sample_rate: u32,
     pub n_frames: Option<u64>,
+    /// Profundidad de bits declarada por el contenedor/códec (None si el
+    /// formato no la expone, p. ej. muchos códecs con pérdida por VBR puro).
+    pub bits_per_sample: Option<u32>,
     pub eof: bool,
     pub served_frames: u64,
     leftover: Vec<f32>,
@@ -111,6 +114,7 @@ impl Decoder {
             .sample_rate
             .ok_or_else(|| OpenError::Unsupported("sin tasa de muestreo".into()))?;
         let n_frames = params.n_frames;
+        let bits_per_sample = params.bits_per_sample.or(params.bits_per_coded_sample);
         let decoder = get_codecs()
             .make(params, &DecoderOptions::default())
             .map_err(|e| OpenError::Unsupported(e.to_string()))?;
@@ -123,6 +127,7 @@ impl Decoder {
             track_id,
             sample_rate,
             n_frames,
+            bits_per_sample,
             eof: false,
             served_frames: 0,
             leftover: Vec::new(),

@@ -29,7 +29,7 @@ const el = {
   bass: $("mix-bass"), treble: $("mix-treble"), balance: $("mix-balance"),
   fade: $("mix-fade"), fadeVal: $("mix-fade-val"), preset: $("eq-preset"), eqBands: $("eq-bands"),
   trackGain: $("mix-track"), trackGainVal: $("mix-track-val"),
-  miniArt: $("mini-art"),
+  miniArt: $("mini-art"), qualityBadge: $("quality-badge"),
   dl: $("downloader"), dlBtn: $("btn-download"), dlUrl: $("dl-url"), dlStart: $("btn-dl-start"),
   dlTarget: $("dl-target"), dlList: $("dl-list"),
 };
@@ -1477,10 +1477,28 @@ function hideMiniArt() {
   el.miniArt.classList.add("hidden");
 }
 
+// muestra formato/tasa de muestreo/profundidad (o tasa de bits aproximada si
+// el archivo no declara bits fijos, p. ej. MP3) de la pista en curso, tal
+// como la reporta get_state — calidad de la FUENTE, no del dispositivo
+function updateQualityBadge(s) {
+  if (!s.path || !s.sample_rate) {
+    el.qualityBadge.classList.add("hidden");
+    return;
+  }
+  const ext = (s.path.split(/[\\/]/).pop().split(".").pop() || "").toUpperCase();
+  const khz = (s.sample_rate / 1000).toFixed(1).replace(/\.0$/, "");
+  let detail = `${khz}kHz`;
+  if (s.bits_per_sample) detail += `/${s.bits_per_sample}bit`;
+  else if (s.bitrate_kbps) detail += ` · ${s.bitrate_kbps}kbps`;
+  el.qualityBadge.textContent = `${ext} · ${detail}`;
+  el.qualityBadge.classList.remove("hidden");
+}
+
 function applyStatus(s) {
   playing = s.state === "playing";
   pos = s.pos || 0;
   updatePlayBtn();
+  updateQualityBadge(s);
   const effDur = s.dur
     ?? (curIdx >= 0 && curIdx < session.length && session[curIdx] ? session[curIdx].dur : 0)
     ?? 0;
