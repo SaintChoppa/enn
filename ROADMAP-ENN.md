@@ -142,9 +142,9 @@ updated: 2026-09-25
 ## 13. 📄 Documentación y presentación como portafolio
 
 - [ ] 🟡 `S` Sección de **arquitectura con diagrama** más visual en el README (ya hay un diagrama ASCII — considerar uno más elaborado para GitHub).
-- [ ] 🟡 `S` `CONTRIBUTING.md` + issues templates — señal de proyecto serio para reclutadores.
+- [x] 🟡 `S` `CONTRIBUTING.md` + issues templates — ✅ hecho (y de paso, arreglados los `clippy`/`fmt` que el propio CONTRIBUTING.md ahora exige en el checklist de PR).
 - [ ] 🟢 `S` Capturas/GIF de features clave (ahora mismo solo hay una imagen estática `docs/enn-ui.png`).
-- [ ] 🟢 `S` Sección "decisiones de diseño" explicando por qué Rust+Tauri sobre Electron, por qué motor propio de DSP en vez de una librería — esto es oro en entrevistas técnicas.
+- [x] 🟢 `S` Sección "decisiones de diseño" — ✅ hecho: Rust+Tauri vs Electron, DSP propio vs librería, sin framework en el frontend.
 
 ---
 
