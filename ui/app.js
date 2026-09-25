@@ -1425,6 +1425,77 @@ setInterval(async () => {
   specBusy = false;
 }, 80);
 
+// ---------------------------------------------------------------- fondo animado (E6)
+// Wallpaper vivo detrás de toda la ventana: reutiliza el mismo espectro de 48
+// bandas del motor (get_spectrum), pero se anima con su propio rAF e
+// interpolación suave entre sondeos — a 80ms de sondeo directo se ve
+// entrecortado; interpolar hace que se sienta a 60fps de verdad.
+(function initBgVisualizer() {
+  const canvas = document.getElementById("bg-visualizer");
+  if (!canvas) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const ctx = canvas.getContext("2d");
+  const N = 48;
+  const cur = new Array(N).fill(0);
+  const target = new Array(N).fill(0);
+  // el gradiente se reconstruye solo cuando cambia el tamaño o el tema, no
+  // en cada frame — 48 gradientes/frame a 60fps (~2880/s) sería justo el
+  // tipo de gasto que este proyecto evita a propósito (ver README, "Why Enn")
+  let barGradient = null;
+  let midY = 0, maxH = 0;
+
+  function rebuildGradient() {
+    const H = window.innerHeight;
+    midY = H * 0.55; // un poco por debajo del centro: se lee mejor detrás de la UI
+    maxH = H * 0.42;
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#4a9eff";
+    barGradient = ctx.createLinearGradient(0, midY - maxH, 0, midY + maxH);
+    barGradient.addColorStop(0, "#7fd4a8");
+    barGradient.addColorStop(0.5, accent);
+    barGradient.addColorStop(1, "#4a9eff");
+  }
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rebuildGradient();
+  }
+  resize();
+  window.addEventListener("resize", resize);
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rebuildGradient);
+  }
+
+  async function poll() {
+    if (document.hidden) return;
+    try {
+      const bands = await invoke("get_spectrum");
+      for (let i = 0; i < N && i < bands.length; i++) target[i] = bands[i];
+    } catch {}
+  }
+  setInterval(poll, 70);
+
+  function draw() {
+    requestAnimationFrame(draw);
+    if (document.hidden) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    ctx.clearRect(0, 0, W, H);
+    const bw = W / N;
+    ctx.fillStyle = barGradient;
+    for (let i = 0; i < N; i++) {
+      cur[i] += (target[i] - cur[i]) * 0.18;
+      const h = Math.max(2, Math.min(cur[i] * H * 0.42, maxH));
+      const x = i * bw;
+      // barra mirror: sube y baja desde el eje central, como un wallpaper
+      // de visualizador clásico en vez de una gráfica ligada al borde
+      ctx.fillRect(x + bw * 0.15, midY - h, bw * 0.7, h * 2);
+    }
+  }
+  requestAnimationFrame(draw);
+})();
+
 // ---------------------------------------------------------------- waveform (B7)
 const waveCanvas = document.getElementById("seek-wave");
 let wavePath = null;
@@ -1487,6 +1558,7 @@ el.seek.addEventListener("change", () => {
 function updatePlayBtn() {
   el.play.innerHTML = playing ? SVG.pause : SVG.play;
   el.play.setAttribute("aria-label", playing ? "Pausar" : "Reproducir");
+  document.body.classList.toggle("is-playing", playing);
 }
 
 let lastTitle = "";
