@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::decode::{self, Tags};
@@ -90,16 +91,28 @@ impl Library {
         }
         let mut files = Vec::new();
         decode::scan_music_dir(Path::new(folder), &mut files);
-        let mut res = AddResult::default();
         let known: std::collections::HashSet<String> =
             self.tracks.iter().map(|t| t.path.clone()).collect();
+        let candidates: Vec<PathBuf> = files
+            .into_iter()
+            .filter(|f| !known.contains(&f.to_string_lossy().to_string()))
+            .collect();
+        // cada archivo se decodifica/etiqueta de forma independiente (sin
+        // estado compartido), así que bibliotecas grandes (10k+ pistas) se
+        // benefician de escanear en paralelo en vez de uno por uno; collect()
+        // sobre un Vec conserva el orden original pese al paralelismo, así
+        // que "primer error" sigue significando lo mismo que antes.
+        let probed: Vec<(PathBuf, Option<Track>)> = candidates
+            .into_par_iter()
+            .map(|f| {
+                let t = probe(&f);
+                (f, t)
+            })
+            .collect();
+        let mut res = AddResult::default();
         let mut fresh: Vec<Track> = Vec::new();
-        for f in files {
-            let fstr = f.to_string_lossy().to_string();
-            if known.contains(&fstr) {
-                continue;
-            }
-            match probe(&f) {
+        for (f, t) in probed {
+            match t {
                 Some(t) => {
                     fresh.push(t);
                     res.added += 1;
@@ -169,13 +182,14 @@ pub struct ProbeMany {
 }
 
 pub fn probe_many(paths: &[PathBuf]) -> ProbeMany {
+    let probed: Vec<Option<Track>> = paths.par_iter().map(|p| probe(p)).collect();
     let mut out = ProbeMany {
         tracks: Vec::new(),
         failed: 0,
         first_error: None,
     };
-    for p in paths {
-        match probe(p) {
+    for (p, t) in paths.iter().zip(probed) {
+        match t {
             Some(t) => out.tracks.push(t),
             None => {
                 out.failed += 1;

@@ -39,3 +39,7 @@ raw-window-handle = "0.6"
 base64 = "0.22"
 # Escritura de etiquetas (B6)
 lofty = "0.22"
+# Escaneo de biblioteca en paralelo (bibliotecas de 10k+ pistas): cada
+# archivo se decodifica/etiqueta de forma independiente, sin estado
+# compartido, así que es un candidato limpio para par_iter.
+rayon = "1"
