@@ -21,13 +21,23 @@ fn download_sidecars() {
     let dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("binaries");
     let _ = std::fs::create_dir_all(&dir);
 
+    // El nombre local (con el triple de destino) es la convención de Tauri
+    // para sidecars (`externalBin` en tauri.conf.json); el asset real que
+    // publica yt-dlp para Windows x64 se llama solo "yt-dlp.exe" — no
+    // "yt-dlp-x86_64-pc-windows-msvc.exe" (esa URL devolvía 404 y dejaba a
+    // cualquier clon nuevo del repo sin yt-dlp hasta que alguien lo notara).
     let ytdlp = dir.join("yt-dlp-x86_64-pc-windows-msvc.exe");
     if !ytdlp.is_file() {
         eprintln!("enn: descargando yt-dlp…");
-        let _ = ps_download(
-            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp-x86_64-pc-windows-msvc.exe",
+        if ps_download(
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
             &ytdlp,
-        );
+        )
+        .is_ok()
+            && ytdlp.is_file()
+        {
+            verify_or_delete(&ytdlp, "yt-dlp.exe");
+        }
     }
 
     let ffmpeg = dir.join("ffmpeg-x86_64-pc-windows-msvc.exe");
@@ -60,6 +70,70 @@ fn download_sidecars() {
                 }
             }
         }
+    }
+}
+
+/// Verifica `path` contra el hash SHA-256 publicado por yt-dlp en su propio
+/// `SHA2-256SUMS` del mismo release ("latest"), buscando la línea de
+/// `asset_name` (el nombre del asset tal como lo publica GitHub, no el
+/// nombre local con el triple de Tauri). Si el hash no coincide — descarga
+/// corrupta o manipulada en tránsito — borra el archivo en vez de dejar un
+/// binario sin verificar en `binaries/`; el resto del build sigue (yt-dlp
+/// terminará resuelto por PATH en tiempo de ejecución, con su propio error
+/// claro si tampoco está ahí). Si no se puede ni descargar ni parsear la
+/// lista de sumas (sin red, GitHub caído...) se deja el binario tal cual:
+/// no hay base para decidir que está mal, y bloquear el build entero por un
+/// problema de red transitorio sería peor que arrancar sin verificar.
+fn verify_or_delete(path: &Path, asset_name: &str) {
+    let dir = match path.parent() {
+        Some(d) => d,
+        None => return,
+    };
+    let sums_path = dir.join("SHA2-256SUMS.tmp");
+    if ps_download(
+        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS",
+        &sums_path,
+    )
+    .is_err()
+        || !sums_path.is_file()
+    {
+        eprintln!("enn: no se pudo descargar SHA2-256SUMS, se omite la verificación de {asset_name}");
+        return;
+    }
+    let expected = std::fs::read_to_string(&sums_path)
+        .ok()
+        .and_then(|sums| {
+            sums.lines().find_map(|line| {
+                let mut parts = line.split_whitespace();
+                let hash = parts.next()?;
+                let name = parts.next()?.trim_start_matches('*');
+                (name == asset_name).then(|| hash.to_ascii_lowercase())
+            })
+        });
+    let _ = std::fs::remove_file(&sums_path);
+    let Some(expected) = expected else {
+        eprintln!("enn: {asset_name} no aparece en SHA2-256SUMS, se omite la verificación");
+        return;
+    };
+
+    let script = format!("(Get-FileHash -Algorithm SHA256 -Path '{}').Hash", path.display());
+    let out = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .output();
+    let actual = match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_ascii_lowercase(),
+        _ => {
+            eprintln!("enn: no se pudo calcular el hash local de {asset_name}, se omite la verificación");
+            return;
+        }
+    };
+    if actual != expected {
+        eprintln!(
+            "cargo:warning=enn: el hash de {asset_name} no coincide con SHA2-256SUMS (esperado {expected}, obtenido {actual}) — se borra, no se empaqueta un binario sin verificar"
+        );
+        let _ = std::fs::remove_file(path);
+    } else {
+        eprintln!("enn: {asset_name} verificado contra SHA2-256SUMS");
     }
 }
 
