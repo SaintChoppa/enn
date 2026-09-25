@@ -1782,6 +1782,7 @@ el.dlBtn.addEventListener("click", () => {
     }
     refreshDlTarget();
     renderDlList();
+    refreshDupCache();
   }
 });
 
@@ -1824,6 +1825,24 @@ el.dlUrl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); startDownload(); }
 });
 
+// detección de duplicados (E1): normaliza títulos para comparar "Song (Official Video)"
+// contra "Song" sin falsos negativos por mayúsculas/acentos/paréntesis
+function normTitleKey(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .replace(/[([].*?[)\]]/g, "") // quita "(Official Video)", "[HQ]", etc.
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+let libTitleKeys = new Set();
+async function refreshDupCache() {
+  try {
+    const tracks = await invoke("lib_list");
+    libTitleKeys = new Set(tracks.map((t) => normTitleKey(t.title)).filter(Boolean));
+  } catch {}
+}
+
 // progreso de descargas: consulta ligera cada 400 ms mientras el panel está abierto
 let dlBusy = false;
 setInterval(async () => {
@@ -1845,6 +1864,12 @@ setInterval(async () => {
       if (t.title && j.displayName !== t.title) {
         j.displayName = t.title;
         changed = true;
+        // aviso de posible duplicado (E1): mismo título ya indexado en la
+        // biblioteca; no bloquea la descarga, solo avisa una vez por tarea
+        if (!j.dupWarned && libTitleKeys.has(normTitleKey(t.title))) {
+          j.dupWarned = true;
+          toast(`Ya tienes algo parecido a "${t.title}" en tu biblioteca`);
+        }
       }
       if (t.state === "done" && t.path) {
         const fname = t.title || fnameBase(t.path);
