@@ -629,7 +629,7 @@ fn download_music(
     if !std::path::Path::new(&dir).is_dir() {
         return Err("la carpeta de descargas no existe; elige otra (botón Cambiar carpeta)".into());
     }
-    if !url.contains("://") {
+    if !downloader::is_valid_download_url(&url) {
         return Err("eso no parece una URL; pega el enlace completo (https://…)".into());
     }
     let bin = downloader::yt_dlp_path();

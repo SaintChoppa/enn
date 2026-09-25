@@ -96,8 +96,19 @@ impl Downloader {
     /// independiente por elemento — cada una con su propio progreso y botón de
     /// cancelar — en vez de descargar un solo vídeo. Devuelve los ids creados,
     /// en el mismo orden que la lista original.
+    ///
+    /// `url` ya debería haber pasado por `is_valid_download_url` en el comando
+    /// de Tauri que llama a esto; se revalida aquí (y cada entrada expandida
+    /// de una lista) porque el valor termina como argumento crudo de yt-dlp —
+    /// una "URL" tipo `--exec=...` ejecutaría comandos arbitrarios si llegara sin filtrar.
     pub fn enqueue(&self, url: String, target_dir: PathBuf, fmt: String) -> Vec<u64> {
-        let entries = resolve_entries(&url);
+        if !is_valid_download_url(&url) {
+            return Vec::new();
+        }
+        let entries: Vec<_> = resolve_entries(&url)
+            .into_iter()
+            .filter(|(u, _)| is_valid_download_url(u))
+            .collect();
         let mut ids = Vec::with_capacity(entries.len());
         for (entry_url, title) in entries {
             let id = self.next_id.fetch_add(1, Ordering::SeqCst);
@@ -316,6 +327,18 @@ pub fn ffmpeg_path() -> Option<PathBuf> {
 fn ffmpeg_available() -> bool {
     static OK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *OK.get_or_init(|| ffmpeg_path().is_some())
+}
+
+/// Valida que `url` sea una URL http(s) de verdad antes de dejarla llegar a
+/// `Command::new(yt_dlp).arg(url)`. yt-dlp parsea sus argumentos con optparse:
+/// un solo argv como `--exec=touch pwned` o `-o /etc/passwd` es indistinguible
+/// de una opción real si no se filtra antes — y `--exec` ejecuta un comando de
+/// shell arbitrario tras la descarga. Exigir el prefijo literal `http(s)://`
+/// (no solo "contiene ://") cierra esa vía por completo.
+pub(crate) fn is_valid_download_url(url: &str) -> bool {
+    let u = url.trim();
+    let low = u.to_ascii_lowercase();
+    (low.starts_with("http://") || low.starts_with("https://")) && !u.contains(char::is_whitespace)
 }
 
 /// Tope duro de elementos por lista para no encolar por accidente una
@@ -691,6 +714,18 @@ mod tests {
             Other => {}
             _ => panic!("los errores no son rutas"),
         }
+    }
+
+    #[test]
+    fn url_validator_blocks_arg_injection() {
+        assert!(is_valid_download_url("https://www.youtube.com/watch?v=abc"));
+        assert!(is_valid_download_url("http://example.com/track.mp3"));
+        assert!(!is_valid_download_url("--exec=touch /tmp/pwned"));
+        assert!(!is_valid_download_url("-o /etc/passwd"));
+        assert!(!is_valid_download_url("file:///etc/passwd"));
+        assert!(!is_valid_download_url("javascript:alert(1)"));
+        assert!(!is_valid_download_url(""));
+        assert!(!is_valid_download_url("https://a.com/x --exec=evil"));
     }
 
     #[test]
