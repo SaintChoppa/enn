@@ -226,26 +226,48 @@ fn worker_loop(app: &tauri::AppHandle, rx: mpsc::Receiver<Job>, stop: Arc<Atomic
 }
 
 pub fn yt_dlp_path() -> PathBuf {
+    let exe_names: &[&str] = if cfg!(windows) {
+        &["yt-dlp.exe", "yt-dlp-x86_64-pc-windows-msvc.exe"]
+    } else {
+        // build.rs todavía no descarga sidecars fuera de Windows (ver
+        // download_sidecars); en Linux/macOS dependemos de PATH por ahora.
+        &["yt-dlp"]
+    };
     // En desarrollo el binario vive en src-tauri/binaries/ ; en el instalador se
     // empaqueta junto al ejecutable de la aplicación (sin el sufijo de target).
-    for name in ["yt-dlp.exe", "yt-dlp-x86_64-pc-windows-msvc.exe"] {
-        let self_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            .unwrap_or_else(|| PathBuf::from("."));
-        let candidate = self_dir.join(name);
-        if candidate.exists() {
-            return candidate;
+    if let Some(self_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+    {
+        for name in exe_names {
+            let candidate = self_dir.join(name);
+            if candidate.exists() {
+                return candidate;
+            }
         }
     }
     // ruta de desarrollo (fuente del proyecto)
-    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("binaries")
-        .join("yt-dlp-x86_64-pc-windows-msvc.exe");
-    if dev.exists() {
-        return dev;
+    for name in exe_names {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join(name);
+        if dev.exists() {
+            return dev;
+        }
     }
-    PathBuf::from("yt-dlp.exe")
+    // último recurso: un yt-dlp instalado por el usuario (pip, apt, brew…)
+    // y visible en PATH — antes solo ffmpeg_path() buscaba aquí
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in path.split(if cfg!(windows) { ';' } else { ':' }) {
+            for name in exe_names {
+                let p = PathBuf::from(dir).join(name);
+                if p.is_file() {
+                    return p;
+                }
+            }
+        }
+    }
+    PathBuf::from(exe_names[0])
 }
 
 /// Directorios donde pueden vivir las herramientas empaquetadas (yt-dlp, ffmpeg):
@@ -374,7 +396,13 @@ fn yt_download(
         );
     }
     let bin = yt_dlp_path();
-    let fs_dir = target_dir.to_string_lossy().to_string();
+    // PathBuf::join usa el separador nativo de cada plataforma (\ en Windows,
+    // / en Linux/macOS) — antes se concatenaba "\\" a mano, lo que producía
+    // rutas rotas fuera de Windows.
+    let out_tmpl = target_dir
+        .join("%(title)s - %(uploader)s.%(ext)s")
+        .to_string_lossy()
+        .to_string();
 
     // flac conserva la máxima calidad; m4a/mp3 siempre a la mejor tasa
     let fmt = match fmt {
@@ -406,7 +434,7 @@ fn yt_download(
         .arg("--trim-filenames")
         .arg("160")
         .arg("-o")
-        .arg(format!("{}\\%(title)s - %(uploader)s.%(ext)s", fs_dir))
+        .arg(out_tmpl)
         .arg(url)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

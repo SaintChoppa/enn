@@ -343,8 +343,19 @@ fn reveal_in_folder(path: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| e.to_string())?;
     }
+    #[cfg(target_os = "macos")]
+    {
+        // `open -R` selecciona el archivo en Finder, igual que /select en Explorer
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(p)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
     #[cfg(target_os = "linux")]
     {
+        // no hay un "seleccionar archivo" universal en Linux (varía por gestor de
+        // archivos); abrimos la carpeta contenedora, que es lo que todos soportan
         if let Some(dir) = p.parent() {
             std::process::Command::new("xdg-open")
                 .arg(dir)
@@ -352,7 +363,7 @@ fn reveal_in_folder(path: String) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
     }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     {
         let _ = p;
         return Err("no soportado en esta plataforma".into());

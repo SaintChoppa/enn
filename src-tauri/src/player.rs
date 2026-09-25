@@ -775,24 +775,35 @@ impl Player {
         let core = self.core.clone();
 
         // salida exclusiva (A1): tasa nativa del archivo (A3); si el
-        // dispositivo no acepta formatos exclusivos, recae en compartido
+        // dispositivo no acepta formatos exclusivos, recae en compartido.
+        // Solo existe en Windows (WASAPI); en otras plataformas cae directo
+        // a la salida compartida de abajo (cpal), sin intentar abrir nada.
         if self.exclusive_on() {
-            let want_rate = self.desired_rate.lock().unwrap().unwrap_or(48000);
-            let (ok_tx, ok_rx) = crossbeam_channel::bounded::<Result<(), String>>(1);
-            let (kill_tx, kill_rx) = crossbeam_channel::bounded::<()>(1);
+            #[cfg(target_os = "windows")]
             {
-                let core = core.clone();
-                std::thread::spawn(move || {
-                    crate::exclusive::open(&core, want_rate, 2, &ok_tx, &kill_rx);
-                });
-            }
-            match ok_rx.recv_timeout(Duration::from_secs(12)) {
-                Ok(Ok(())) => {
-                    *guard = Some(kill_tx);
-                    return Ok(());
+                let want_rate = self.desired_rate.lock().unwrap().unwrap_or(48000);
+                let (ok_tx, ok_rx) = crossbeam_channel::bounded::<Result<(), String>>(1);
+                let (kill_tx, kill_rx) = crossbeam_channel::bounded::<()>(1);
+                {
+                    let core = core.clone();
+                    std::thread::spawn(move || {
+                        crate::exclusive::open(&core, want_rate, 2, &ok_tx, &kill_rx);
+                    });
                 }
-                Ok(Err(e)) => log_msg(&format!("exclusiva no disponible, compartida: {e}")),
-                Err(_) => log_msg("exclusiva sin respuesta, compartida"),
+                match ok_rx.recv_timeout(Duration::from_secs(12)) {
+                    Ok(Ok(())) => {
+                        *guard = Some(kill_tx);
+                        return Ok(());
+                    }
+                    Ok(Err(e)) => log_msg(&format!("exclusiva no disponible, compartida: {e}")),
+                    Err(_) => log_msg("exclusiva sin respuesta, compartida"),
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                log_msg(
+                    "salida exclusiva bit-perfect solo está implementada en Windows (WASAPI); usando salida compartida",
+                );
             }
         }
 
