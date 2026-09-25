@@ -334,7 +334,7 @@ async function playAt(i, gainDb) {
   const track = session[i];
   if (!track || typeof track.path !== "string" || !track.path) {
     try {
-      await invoke("dbg_log", { msg: `playAt(${i}) ruta inválida: ${JSON.stringify(track)}` });
+      await invoke("dbg_log", { msg: `playAt(${i}) ruta inválida: ${JSON.stringify(track)}`, level: "warn" });
     } catch {}
     toast("Esta canción no tiene ruta válida");
     return;
@@ -364,6 +364,7 @@ async function playAt(i, gainDb) {
     try {
       await invoke("dbg_log", {
         msg: `playAt(${i}) tipo=${typeof track.path} valor=${JSON.stringify(track.path)} error=${e}`,
+        level: "error",
       });
     } catch {}
     toast(`No se pudo reproducir: ${e}`);
@@ -545,7 +546,7 @@ async function playFromLibrary(idx) {
   if (!t) return;
   if (!t.path) {
     try {
-      await invoke("dbg_log", { msg: `playFromLibrary(${idx}) sin path: ${JSON.stringify(t)}` });
+      await invoke("dbg_log", { msg: `playFromLibrary(${idx}) sin path: ${JSON.stringify(t)}`, level: "warn" });
     } catch {}
     toast("Esa entrada no tiene ruta");
     return;

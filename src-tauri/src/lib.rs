@@ -488,8 +488,14 @@ fn tags_write(
 }
 
 #[tauri::command]
-fn dbg_log(msg: String) {
-    player::log_msg(&format!("UI: {msg}"));
+fn dbg_log(msg: String, level: Option<String>) {
+    let line = format!("UI: {msg}");
+    match level.as_deref() {
+        Some("debug") => player::log_debug(&line),
+        Some("warn") => player::log_warn(&line),
+        Some("error") => player::log_error(&line),
+        _ => player::log_msg(&line),
+    }
 }
 
 // ---------------------------------------------------------------- descargador
@@ -798,7 +804,7 @@ pub fn run() {
                     "ctrl+alt+m",
                 ] {
                     if let Err(e) = gs.register(sc) {
-                        player::log_msg(&format!("atajo global {sc} no disponible: {e}"));
+                        player::log_warn(&format!("atajo global {sc} no disponible: {e}"));
                     }
                 }
             }

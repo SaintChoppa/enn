@@ -510,18 +510,7 @@ fn yt_download(
     }
     if !status.success() {
         let code = status.code().unwrap_or(-1);
-        let tail: String = stderr_out
-            .lines()
-            .rev()
-            .take(3)
-            .collect::<Vec<_>>()
-            .join(" | ");
-        let detail = if tail.is_empty() {
-            String::new()
-        } else {
-            format!(" — {tail}")
-        };
-        return Err(format!("yt-dlp terminó con error (código {code}){detail}"));
+        return Err(friendly_download_error(code, &stderr_out));
     }
 
     if let Some(p) = final_path.filter(|p| p.exists()) {
@@ -529,6 +518,63 @@ fn yt_download(
     }
     // respaldo: el archivo de audio más reciente de la carpeta destino
     latest_file_in(target_dir).ok_or_else(|| "se descargó pero no se encontró el archivo".into())
+}
+
+/// Traduce el stderr crudo de yt-dlp a un mensaje entendible para el usuario
+/// final, cubriendo las causas de fallo más comunes; si ninguna coincide,
+/// cae de vuelta a mostrar las últimas líneas de stderr (útil para reportar
+/// bugs) en vez de un mensaje genérico sin información.
+fn friendly_download_error(code: i32, stderr_out: &str) -> String {
+    let low = stderr_out.to_lowercase();
+    let tail = || -> String {
+        stderr_out
+            .lines()
+            .rev()
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(" | ")
+    };
+    let reason = if low.contains("video unavailable") || low.contains("this video is unavailable")
+    {
+        Some("el vídeo ya no está disponible (borrado o retirado por su autor)".to_string())
+    } else if low.contains("private video") {
+        Some("el vídeo es privado".to_string())
+    } else if low.contains("sign in to confirm your age") || low.contains("age-restricted") {
+        Some("el vídeo tiene restricción de edad y yt-dlp no pudo saltarla sin iniciar sesión".to_string())
+    } else if low.contains("this video is not available") || low.contains("not available in your country") {
+        Some("el vídeo no está disponible en tu región".to_string())
+    } else if low.contains("http error 403") || low.contains("http error 429") {
+        Some("el servidor rechazó la descarga (posible bloqueo temporal por demasiadas peticiones); espera un momento y reintenta".to_string())
+    } else if low.contains("unable to download webpage")
+        || low.contains("failed to establish a new connection")
+        || low.contains("network is unreachable")
+        || low.contains("timed out")
+    {
+        Some("no hay conexión a internet o el servidor no respondió a tiempo".to_string())
+    } else if low.contains("no space left on device") {
+        Some("no queda espacio en el disco de destino".to_string())
+    } else if low.contains("unsupported url") {
+        Some("ese enlace no es de un sitio soportado por yt-dlp".to_string())
+    } else if low.contains("ffmpeg") && (low.contains("not found") || low.contains("no such file")) {
+        Some(
+            "no se encontró ffmpeg para convertir el audio; instálalo (winget install ffmpeg) y vuelve a intentarlo"
+                .to_string(),
+        )
+    } else {
+        None
+    };
+    match reason {
+        Some(r) => format!("{r} (yt-dlp, código {code})"),
+        None => {
+            let t = tail();
+            let detail = if t.is_empty() {
+                String::new()
+            } else {
+                format!(" — {t}")
+            };
+            format!("yt-dlp terminó con error (código {code}){detail}")
+        }
+    }
 }
 
 /// Extrae el porcentaje de una línea tipo `[download]  42.5% of ...`
@@ -645,6 +691,25 @@ mod tests {
             Other => {}
             _ => panic!("los errores no son rutas"),
         }
+    }
+
+    #[test]
+    fn friendly_error_recognizes_common_causes() {
+        assert!(friendly_download_error(1, "ERROR: [youtube] abc: Video unavailable")
+            .contains("ya no está disponible"));
+        assert!(friendly_download_error(1, "ERROR: Private video. Sign in if you've been invited")
+            .contains("privado"));
+        assert!(friendly_download_error(1, "urllib.error: HTTP Error 429: Too Many Requests")
+            .contains("bloqueo temporal"));
+        assert!(friendly_download_error(1, "socket.timeout: The read operation timed out")
+            .contains("no respondió a tiempo"));
+    }
+
+    #[test]
+    fn friendly_error_falls_back_to_raw_tail() {
+        let msg = friendly_download_error(2, "ERROR: something truly unexpected happened");
+        assert!(msg.contains("código 2"));
+        assert!(msg.contains("something truly unexpected happened"));
     }
 
     #[test]

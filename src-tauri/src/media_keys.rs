@@ -13,7 +13,7 @@ use souvlaki::{
 };
 use tauri::{Emitter, Manager};
 
-use crate::player::{log_msg, Core, PlayState};
+use crate::player::{log_msg, log_warn, Core, PlayState};
 
 /// Nombre registrado en el bus (MPRIS en Linux); el visible es "Enn".
 const DBUS_NAME: &str = "enn";
@@ -46,7 +46,7 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<std::sync::Mutex<Core>>, rx: Recei
         let mut controls = match create_controls(&app) {
             Ok(c) => c,
             Err(e) => {
-                log_msg(&format!("controles multimedia no disponibles: {e}"));
+                log_warn(&format!("controles multimedia no disponibles: {e}"));
                 return;
             }
         };
@@ -54,7 +54,7 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<std::sync::Mutex<Core>>, rx: Recei
             let ev_app = app.clone();
             let ev_core = core.clone();
             if let Err(e) = controls.attach(move |ev| handle_event(&ev_app, &ev_core, ev)) {
-                log_msg(&format!("no se pudieron registrar los controles: {e}"));
+                log_warn(&format!("no se pudieron registrar los controles: {e}"));
                 return;
             }
         }
@@ -124,7 +124,7 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<std::sync::Mutex<Core>>, rx: Recei
                     },
                 };
                 if let Err(e) = controls.set_metadata(meta) {
-                    log_msg(&format!("smtc: fallo set_metadata: {e}"));
+                    log_warn(&format!("smtc: fallo set_metadata: {e}"));
                 }
             }
             let state_key = (state, pos as u64);
@@ -140,7 +140,7 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<std::sync::Mutex<Core>>, rx: Recei
                     PlayState::Idle => MediaPlayback::Stopped,
                 };
                 if let Err(e) = controls.set_playback(playback) {
-                    log_msg(&format!("smtc: fallo set_playback: {e}"));
+                    log_warn(&format!("smtc: fallo set_playback: {e}"));
                 }
             }
         }

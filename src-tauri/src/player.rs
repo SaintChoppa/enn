@@ -9,12 +9,46 @@ use tauri::Emitter;
 use crate::decode::{duration_of, Decoder, Tags};
 use crate::dsp;
 
-pub fn log_msg(msg: &str) {
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+pub enum LogLevel {
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl LogLevel {
+    fn label(&self) -> &'static str {
+        match self {
+            LogLevel::Debug => "DEBUG",
+            LogLevel::Info => "INFO",
+            LogLevel::Warn => "WARN",
+            LogLevel::Error => "ERROR",
+        }
+    }
+}
+
+/// Nivel mínimo a loguear, configurable con `ENN_LOG=debug|info|warn|error`
+/// (por defecto `info`, así que `log_debug` calla salvo que se pida explícitamente).
+fn min_level() -> LogLevel {
+    static LEVEL: std::sync::OnceLock<LogLevel> = std::sync::OnceLock::new();
+    *LEVEL.get_or_init(|| match std::env::var("ENN_LOG").as_deref() {
+        Ok("debug") => LogLevel::Debug,
+        Ok("warn") => LogLevel::Warn,
+        Ok("error") => LogLevel::Error,
+        _ => LogLevel::Info,
+    })
+}
+
+pub fn log(level: LogLevel, msg: &str) {
+    if level < min_level() {
+        return;
+    }
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    let line = format!("[{stamp}] {msg}\n");
+    let line = format!("[{stamp}] [{}] {msg}\n", level.label());
     let path = std::env::temp_dir().join("enn-debug.log");
     use std::io::Write;
     if let Ok(mut f) = std::fs::OpenOptions::new()
@@ -24,7 +58,23 @@ pub fn log_msg(msg: &str) {
     {
         let _ = f.write_all(line.as_bytes());
     }
-    eprintln!("enn: {msg}");
+    eprintln!("enn [{}]: {msg}", level.label());
+}
+
+pub fn log_msg(msg: &str) {
+    log(LogLevel::Info, msg);
+}
+
+pub fn log_debug(msg: &str) {
+    log(LogLevel::Debug, msg);
+}
+
+pub fn log_warn(msg: &str) {
+    log(LogLevel::Warn, msg);
+}
+
+pub fn log_error(msg: &str) {
+    log(LogLevel::Error, msg);
 }
 
 pub trait SampleOut: Sized {
@@ -617,7 +667,7 @@ fn audio_owner(
     let dev = match resolve_device(want) {
         Ok(d) => d,
         Err(e) => {
-            log_msg(&format!("audio_owner: sin dispositivo: {e}"));
+            log_error(&format!("audio_owner: sin dispositivo: {e}"));
             let _ = ok_tx.send(Err(e));
             return;
         }
@@ -628,7 +678,7 @@ fn audio_owner(
         Ok(s) => s,
         Err(e) => {
             let m = format!("no se pudo abrir el dispositivo («{dev_name}»): {e}");
-            log_msg(&m);
+            log_error(&m);
             let _ = ok_tx.send(Err(m));
             return;
         }
@@ -654,7 +704,7 @@ fn audio_owner(
                 },
                 move |e| {
                     let m = format!("error del stream de audio: {e}");
-                    log_msg(&m);
+                    log_error(&m);
                     if let Ok(mut c) = c2.lock() {
                         c.runtime_error = Some(m);
                         c.pending_event = Some("state");
@@ -672,7 +722,7 @@ fn audio_owner(
         other => {
             let m =
                 format!("el dispositivo «{dev_name}» usa un formato aún no soportado: {other:?}");
-            log_msg(&m);
+            log_error(&m);
             let _ = ok_tx.send(Err(m));
             return;
         }
@@ -682,7 +732,7 @@ fn audio_owner(
         Ok(s) => s,
         Err(e) => {
             let m = format!("fallo al iniciar la salida de audio en «{dev_name}»: {e}");
-            log_msg(&m);
+            log_error(&m);
             let _ = ok_tx.send(Err(m));
             return;
         }
@@ -697,7 +747,7 @@ fn audio_owner(
     log_msg("audio_owner: iniciando reproducción (play)");
     if let Err(e) = stream.play() {
         let m = format!("no se pudo iniciar la reproducción en «{dev_name}»: {e}");
-        log_msg(&m);
+        log_error(&m);
         let _ = ok_tx.send(Err(m));
         return;
     }
@@ -795,8 +845,8 @@ impl Player {
                         *guard = Some(kill_tx);
                         return Ok(());
                     }
-                    Ok(Err(e)) => log_msg(&format!("exclusiva no disponible, compartida: {e}")),
-                    Err(_) => log_msg("exclusiva sin respuesta, compartida"),
+                    Ok(Err(e)) => log_warn(&format!("exclusiva no disponible, compartida: {e}")),
+                    Err(_) => log_warn("exclusiva sin respuesta, compartida"),
                 }
             }
             #[cfg(not(target_os = "windows"))]
@@ -821,7 +871,7 @@ impl Player {
                     .map(|s| s.to_string())
                     .or_else(|| p.downcast_ref::<String>().cloned())
                     .unwrap_or_else(|| "pánico desconocido".into());
-                log_msg(&format!("audio_owner: PÁNICO: {msg}"));
+                log_error(&format!("audio_owner: PÁNICO: {msg}"));
                 let _ = ok_tx2.send(Err(format!("el motor de audio falló internamente: {msg}")));
             }
         });
@@ -830,7 +880,7 @@ impl Player {
             Ok(r) => r,
             Err(_) => {
                 let m = "el dispositivo de audio no respondió a tiempo".to_string();
-                log_msg(&m);
+                log_error(&m);
                 Err(m)
             }
         }
