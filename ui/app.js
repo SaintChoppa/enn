@@ -1496,6 +1496,116 @@ setInterval(async () => {
   requestAnimationFrame(draw);
 })();
 
+// ---------------------------------------------------------------- Ahora suena (E5)
+// Vista a pantalla completa: carátula grande + título/artista + el mismo
+// espectro de 48 bandas, aquí en primer plano (más vívido que el fondo).
+let npOpen = false;
+function setNowPlayingArt(uri) {
+  const img = document.getElementById("np-art");
+  const ph = document.getElementById("np-placeholder");
+  if (!img || !ph) return;
+  if (uri) {
+    img.src = uri;
+    img.classList.remove("hidden");
+    ph.classList.add("hidden");
+  } else {
+    img.classList.add("hidden");
+    ph.classList.remove("hidden");
+  }
+}
+function setNowPlayingText(title, artist) {
+  const t = document.getElementById("np-title");
+  const a = document.getElementById("np-artist");
+  if (t) t.textContent = title || "—";
+  if (a) a.textContent = artist || "";
+}
+
+(function initNowPlaying() {
+  const panel = document.getElementById("now-playing");
+  const closeBtn = document.getElementById("np-close");
+  const metaBtn = document.getElementById("ctl-meta");
+  if (!panel || !metaBtn) return;
+
+  function open() {
+    panel.classList.remove("hidden");
+    // dos rAF: deja que el navegador pinte el estado inicial (opacity:0)
+    // antes de añadir .show, si no la transición no se ve (salta directo)
+    requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("show")));
+    npOpen = true;
+  }
+  function close() {
+    panel.classList.remove("show");
+    npOpen = false;
+    setTimeout(() => panel.classList.add("hidden"), 260);
+  }
+  metaBtn.addEventListener("click", open);
+  closeBtn.addEventListener("click", close);
+  panel.addEventListener("click", (e) => {
+    if (e.target === panel) close(); // clic en el fondo, fuera de la carátula
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && npOpen) close();
+  });
+
+  // espectro propio: más grande/vívido que el del fondo, y solo corre
+  // mientras la vista está abierta (nada de coste cuando está cerrada)
+  const canvas = document.getElementById("np-spectrum");
+  const ctx = canvas.getContext("2d");
+  const N = 48;
+  const cur = new Array(N).fill(0);
+  const target = new Array(N).fill(0);
+  let barGradient = null, midY = 0, maxH = 0;
+
+  function rebuildGradient() {
+    const H = panel.clientHeight || window.innerHeight;
+    midY = H * 0.5;
+    maxH = H * 0.48;
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#4a9eff";
+    barGradient = ctx.createLinearGradient(0, midY - maxH, 0, midY + maxH);
+    barGradient.addColorStop(0, "#7fd4a8");
+    barGradient.addColorStop(0.5, accent);
+    barGradient.addColorStop(1, "#4a9eff");
+  }
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const W = panel.clientWidth || window.innerWidth;
+    const H = panel.clientHeight || window.innerHeight;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rebuildGradient();
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  setInterval(async () => {
+    if (!npOpen || document.hidden) return;
+    try {
+      const bands = await invoke("get_spectrum");
+      for (let i = 0; i < N && i < bands.length; i++) target[i] = bands[i];
+    } catch {}
+  }, 60);
+
+  function draw() {
+    requestAnimationFrame(draw);
+    if (!npOpen) return;
+    const W = panel.clientWidth || window.innerWidth;
+    const H = panel.clientHeight || window.innerHeight;
+    ctx.clearRect(0, 0, W, H);
+    const bw = W / N;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = barGradient;
+    for (let i = 0; i < N; i++) {
+      cur[i] += (target[i] - cur[i]) * 0.22;
+      const h = Math.max(2, Math.min(cur[i] * H * 0.48, maxH));
+      const x = i * bw;
+      ctx.fillRect(x + bw * 0.12, midY - h, bw * 0.76, h * 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+  requestAnimationFrame(draw);
+})();
+
 // ---------------------------------------------------------------- waveform (B7)
 const waveCanvas = document.getElementById("seek-wave");
 let wavePath = null;
@@ -1580,11 +1690,13 @@ async function setMiniArt(path) {
   } else {
     el.miniArt.classList.add("hidden");
   }
+  setNowPlayingArt(uri);
 }
 
 function hideMiniArt() {
   lastArtPath = null;
   el.miniArt.classList.add("hidden");
+  setNowPlayingArt(null);
 }
 
 // muestra formato/tasa de muestreo/profundidad (o tasa de bits aproximada si
@@ -1615,6 +1727,7 @@ function applyStatus(s) {
   if (s.title && s.title !== lastTitle) {
     lastTitle = s.title;
     el.miniTitle.textContent = s.title;
+    setNowPlayingText(s.title, s.artist);
   }
   if (s.path && s.path !== lastArtPath) {
     lastArtPath = s.path;

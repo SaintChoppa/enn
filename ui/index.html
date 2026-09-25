@@ -137,7 +137,7 @@
       <button id="btn-prev" class="ctl" title="Anterior" aria-label="Pista anterior">⏮</button>
       <button id="btn-play" class="ctl big" title="Reproducir/Pausar (espacio)" aria-label="Reproducir o pausar">▶</button>
       <button id="btn-next" class="ctl" title="Siguiente" aria-label="Siguiente pista">⏭</button>
-      <div class="ctl-meta" id="ctl-meta">
+      <div class="ctl-meta" id="ctl-meta" title="Ver a pantalla completa">
         <img id="mini-art" class="mini-art hidden" alt="" />
         <span id="mini-title">—</span>
         <span id="quality-badge" class="quality-badge hidden" title="Calidad de la fuente: formato, tasa de muestreo y profundidad/tasa de bits del archivo"></span>
@@ -173,6 +173,17 @@
       </div>
     </div>
     <div id="toast" class="hidden"></div>
+
+    <div id="now-playing" class="hidden" aria-hidden="true">
+      <canvas id="np-spectrum"></canvas>
+      <button id="np-close" class="icon-btn" title="Cerrar (Esc)" aria-label="Cerrar vista a pantalla completa">✕</button>
+      <div class="np-card">
+        <img id="np-art" alt="" class="hidden" />
+        <div id="np-placeholder" class="np-placeholder hidden">♪</div>
+        <div id="np-title">—</div>
+        <div id="np-artist"></div>
+      </div>
+    </div>
   </div>
   <script src="app.js" type="module"></script>
 </body>
