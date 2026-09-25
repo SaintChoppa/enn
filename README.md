@@ -1,170 +1,88 @@
 # Enn
 
-Reproductor de música para Microsoft Windows, escrito en Rust con interfaz nativa embebida mediante Tauri. No depende de ningún servicio remoto: todo el procesamiento —decodificación, mezcla, ecualización y salida— ocurre de manera local, en el equipo del usuario.
+A lightweight, high-fidelity music player for Windows, written in Rust with a native-feeling web UI (Tauri 2). No subscriptions, no telemetry, no cloud: decoding, mixing, equalization and output all happen locally.
 
----
+![Enn](docs/enn-ui.png)
 
-## Resumen
+## Why Enn
 
-Existen muchas aplicaciones reproductoras en el mercado y, sin embargo, sigue siendo poco frecuente encontrar una que satisfaga al mismo tiempo tres criterios: bajo consumo de memoria, soporte amplio de formatos y una interfaz de uso inmediato. Los reproductores con catálogos comerciales tienden a integrar suscripciones, telemetría y procesos auxiliares; los que apuntan a la máxima calidad sonora suelen exigir configuración previa y curvas de aprendizaje considerables.
+Most players force a trade-off: commercial catalog apps are heavy and phone home; audiophile players demand a steep setup. Enn takes a deliberate middle path:
 
-Enn intenta un punto intermedio deliberado. Su motor de audio es un flujo en tiempo real simple: el archivo se decodifica bajo demanda, se convierte a punto flotante de 32 bits, se procesa mediante una cadena de filtros biquad y se envía al dispositivo de salida del sistema. La operación típica es exactamente la de cualquier reproductor ligero: se agrega una carpeta, se elige una canción y la reproducción comienza de inmediato.
+- **Very low resource usage** — a real-time engine in Rust, a framework-free UI, no background services.
+- **Broad format support** — MP3, FLAC, WAV, AIFF, OGG/Vorbis, Opus, M4A/AAC via [Symphonia](https://github.com/pdeljanov/Symphonia).
+- **Serious audio quality** — 32-bit float pipeline, polyphase resampler, 10-band EQ, ReplayGain 2.0 loudness normalization.
+- **Instant to use** — add a folder, click a song, it plays.
 
----
+## Features
 
-## Características
-
-| Área | Función |
+| Area | Details |
 |---|---|
-| Formatos | MP3, FLAC, WAV, AIFF, OGG/Vorbis, Opus, M4A/AAC (decodificación por Symphonia) |
-| Salida de audio | WASAPI compartido, punto flotante de 32 bits, hasta 2 canales, 48 kHz |
-| Controles | Reproducir/pausar, anterior/siguiente, barra de progreso con búsqueda instantánea, volumen maestro |
-| Biblioteca | Escaneo recursivo de carpetas; lectura de etiquetas (título, artista, álbum); duración calculada incluso para archivos VBR |
-| Cola | Vista de las próximas pistas, con reordenamiento por clic y eliminación individual |
-| Reproducción | Modo ordenado, aleatorio (shuffle) y repetición (una pista o toda la cola) |
-| Mezcla | Ecualizador gráfico de 10 bandas, presets sintonizados a mano, graves/agudos, balance estéreo, fundido de transición y ganancia relativa por pista |
-| Listas | Guardar y abrir playlists en formato M3U/M3U8 |
-| Interfaz | Tema claro/oscuro automático según el sistema, divisor de paneles ajustable, división de ventana persistente, atajos de teclado |
-| Persistencia | Biblioteca, ajustes del mezclador, cola de reproducción y ganancias por pista se conservan entre sesiones |
-| Distribución | Instalador NSIS (un solo ejecutable de instalación) |
+| Audio engine | Symphonia decode → f32 stereo → 10-band + 4 parametric biquad EQ (RBJ) → bass/treble/balance → polyphase resampler (64-tap Blackman-windowed sinc, 256 phases) → WASAPI shared (CPAL) or **exclusive bit-perfect** output at the file's native sample rate (44.1–192 kHz) |
+| Loudness | ReplayGain 2.0 (EBU R128 K-weighting, double gating) analyzed in background, applied per track |
+| Visualization | 48-band log spectrum analyzer (own radix-2 FFT) and per-track waveform in the seek bar |
+| Library | Recursive folder scan, tag reading, VBR-safe durations, advanced search (`artist:`, `album:`, `format:`), artist and album views with embedded cover art |
+| Queue | Visible up-next list, drag to reorder, context menu, shuffle, repeat one/all, **radio mode** that keeps suggesting similar tracks |
+| History | Recently played and most-played smart lists |
+| Playlists | M3U/M3U8 import/export plus named app playlists with per-track add/remove |
+| Tag editor | Rewrite title/artist/album directly into the audio files (lofty) |
+| Downloader | Built-in audio download for any yt-dlp site (YouTube, SoundCloud, Bandcamp…), single tracks **or full playlists/albums** (auto-expanded into individual per-track jobs), M4A/MP3/FLAC output, per-task cancel, real-time progress |
+| System integration | SMTC media keys / volume overlay (Windows), global hotkeys (Ctrl+Alt+P/←/→/S/M), system tray with close-to-tray, output device picker, mini mode, auto light/dark theme, portable mode |
+| Persistence | Library, mixer settings, queue, per-track gains, playlists and art/waveform caches survive restarts |
 
----
-
-## Arquitectura
-
-El proyecto se divide en dos componentes que se comunican a través del puente IP de Tauri:
-
-1. **Núcleo de audio en Rust** (`src-tauri/src/`)
-   - `decode.rs`: lectura de contenedores y decodificación de códecs mediante Symphonia; normalización a estéreo de punto flotante; medición de duración para archivos sin índice.
-   - `dsp.rs`: implementación de filtros biquad según el método de RBJ (peaking, low-shelf y high-shelf), ecualizador de 10 bandas y remuestreador lineal.
-   - `player.rs`: gestión del hilo de audio, cola interna de comandos y canal de eventos hacia la interfaz. Usa CPAL para la salida WASAPI.
-   - `library.rs`: índice persistente de la biblioteca en JSON y soporte de playlists M3U.
-2. **Interfaz de usuario web** (`ui/`)
-   - Sin frameworks: HTML, CSS y JavaScript moderno.
-   - Se comunica con el núcleo mediante comandos tipados `#[tauri::command]`.
-   - El estado de reproducción se consulta por sondeo ligero (250 ms), lo que evita la acumulación de eventos entre procesos.
+## Architecture
 
 ```
-Archivo de audio
+Audio file
      │
      ▼
- Symphonia ── decodificación a PCM f32 estéreo
+ Symphonia ── decode to f32 stereo PCM
      │
      ▼
- ecualizador 10 bandas · tono · balance · ganancia por pista
+ 10-band EQ · tone · balance · ReplayGain gain
      │
      ▼
- remuestreo a la frecuencia del dispositivo
+ polyphase resampler (to device rate)
      │
      ▼
- WASAPI compartido ── altavoces o salida elegida
+ WASAPI shared ── speakers or chosen output
 ```
 
-<br>
+- `src-tauri/src/decode.rs` — container/codec handling, f32 normalization
+- `src-tauri/src/dsp.rs` — RBJ biquads, 10-band + parametric EQ, polyphase resampler, FFT
+- `src-tauri/src/player.rs` — stream owner thread, command queue, sample-accurate fades
+- `src-tauri/src/exclusive.rs` — WASAPI exclusive mode (bit-perfect, native rates)
+- `src-tauri/src/rg.rs` — EBU R128 loudness analysis (K-weighting, dual gate)
+- `src-tauri/src/art.rs` — embedded cover extraction with on-disk cache
+- `src-tauri/src/waves.rs` — waveform peak analysis with on-disk cache
+- `src-tauri/src/media_keys.rs` — SMTC now, MPRIS-ready (Linux port planned)
+- `src-tauri/src/downloader.rs` — serial download worker around yt-dlp
+- `ui/` — framework-free HTML/CSS/JS over typed Tauri commands
 
-<div align="center">
+The UI polls engine state every 250 ms (no event accumulation between processes) and renders the library in windows of 500 rows.
 
-## Vista de la interfaz principal
+## Build
 
-![Vista de Enn mostrando la biblioteca, la cola de reproducción y el mezclador](docs/enn-ui.png)
-
-*Figura 1. Enn en ejecución: biblioteca de la izquierda, cola de próximas pistas a la derecha y mezclador desplegado en la parte inferior. La canción «Arizona — Eladio Carrion» se encuentra en reproducción (8 segundos transcurridos de 3 minutos 20 segundos).*
-
-</div>
-
----
-
-## Decisiones de diseño
-
-- **Punto flotante de 32 bits en toda la cadena.** Aunque el decodificador pueda producir enteros de 16 o 24 bits, la conversión inmediata a f32 evita la acumulación de errores de redondeo cuando se encadenan filtros.
-
-- **Remuestreador lineal propio.** Para una frecuencia de 48 kHz de los dispositivos modernos y archivos a 44,1 kHz, la interpolación lineal con un remuestreo de calidad razonable es suficiente en la práctica; un remuestreador polifásico sería de mayor costo sin beneficio perceptible en la banda audible.
-
-- **Decodificación bajo demanda, no precarga.** El decodificador solo produce los marcos que el hilo de audio necesita para el siguiente bloque de 480 muestras (10 ms a 48 kHz). Este enfoque mantiene el consumo de memoria constante, independientemente de la duración de la pista, y deja disponible el resto del sistema durante la reproducción.
-
-- **Arquitectura de prueba automatizada.** Dos pruebas de integración —`decode_drain` y `audio_smoke`— validan la extracción completa de los marcos de un archivo WAV sintético y la reproducción real por el dispositivo de salida, respectivamente.
-
----
-
-## Compilación
-
-### Requisitos
-
-- [Rust](https://rustup.rs) — toolchain `stable-x86_64-pc-windows-msvc`
-- Visual Studio Build Tools 2022 con el componente *Desktop development with C++*
-- [Node.js](https://nodejs.org) 22 o superior
-- WebView2 (incluido en Windows 11; en Windows 10 se obtiene con la última actualización)
-
-### Pasos
+Requirements: [Rust](https://rustup.rs), Node.js (for the Tauri CLI), and on Windows the MSVC toolchain.
 
 ```bash
-npm install          # instala la CLI de Tauri
-npm run tauri dev    # modo desarrollo (recarga en vivo del frontend)
-npm run tauri build  # instalador NSIS en src-tauri/target/release/bundle/nsis/
+npm install
+npm run tauri dev      # run in development
+npm run tauri build    # produce the NSIS installer
 ```
 
-En proyectos alojados en carpetas sincronizadas (por ejemplo, OneDrive) conviene desviar el directorio de artefactos:
+On first build, `build.rs` downloads the `yt-dlp` and `ffmpeg` sidecars (not stored in the repository) so the installer works out of the box.
 
-```powershell
-$env:CARGO_TARGET_DIR = "D:\enn-target"
+## Testing
+
+```bash
+cd src-tauri
+cargo test             # decode drain, audio smoke, LUFS analysis, FFT, yt-dlp line parsing
 ```
 
----
+## Roadmap
 
-## Uso
+Linux port (ALSA/PipeWire + MPRIS), overlapped crossfade and more — tracked in the project notes.
 
-1. **Abrir carpeta** — indexa toda la biblioteca y lee los metadatos de los archivos.
-2. **Búsqueda** — filtra por título, artista o álbum al escribir.
-3. **Reproducción** — un clic sobre una canción la pone sonando; la cola al costado muestra las siguientes.
-4. **Mezclador** — el botón 🎛️ despliega ecualizador, tono, balance, fundido y ganancia por pista.
+## License
 
-### Atajos de teclado
-
-| Tecla | Acción |
-|---|---|
-| `Espacio` | Reproducir / pausar |
-| `←` `→` | Canción anterior / siguiente |
-| `M` | Mostrar/ocultar el mezclador |
-
----
-
-## Estructura del repositorio
-
-```
-enn/
-├── src-tauri/          # núcleo Rust (audio, DSP, biblioteca, playlists)
-│   └── src/
-│       ├── decode.rs   # decodificación de códecs con Symphonia
-│       ├── dsp.rs      # filtros biquad, ecualizador, remuestreo
-│       ├── player.rs   # hilo de audio y salida WASAPI
-│       ├── library.rs  # índice persistente y playlists
-│       └── lib.rs      # entrada de la aplicación
-├── ui/                 # interfaz web (sin framework)
-└── package.json        # scripts de desarrollo/build
-```
-
----
-
-## Estado del proyecto
-
-La versión 0.1.0 es la primera distribución estable. Se entregó como instalador `Enn_0.1.0_x64-setup.exe`, generado con NSIS.
-
-### Trabajo futuro
-
-- Salida WASAPI en modo exclusivo (bit-perfect), seleccionable desde la configuración.
-- Decodificación de WMA mediante FFmpeg como códec de reserva.
-- Crossfade real entre pistas (superposición de audio), en contraste con el fundido que existe hoy.
-
----
-
-## Licencia
-
-Aún no definida. El código es propietario de su autor.
-
----
-
-## Créditos
-
-Enn se apoya en [Symphonia](https://github.com/pdeljanov/Symphonia) para la decodificación, [CPAL](https://github.com/RustAudio/cpal) para la salida de audio y [Tauri](https://tauri.app) como marco de aplicación de escritorio.
-
-La música utiliza información de metadatos de los propios archivos del usuario, sin descarga externa.
+[MIT](LICENSE)

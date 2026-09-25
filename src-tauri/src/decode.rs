@@ -34,7 +34,6 @@ pub struct Decoder {
     decoder: Box<dyn SymDecoder>,
     track_id: u32,
     pub sample_rate: u32,
-    pub channels: usize,
     pub n_frames: Option<u64>,
     pub eof: bool,
     pub served_frames: u64,
@@ -111,11 +110,6 @@ impl Decoder {
         let sample_rate = params
             .sample_rate
             .ok_or_else(|| OpenError::Unsupported("sin tasa de muestreo".into()))?;
-        let channels = params
-            .channels
-            .map(|c| c.count())
-            .unwrap_or(2)
-            .clamp(1, 8);
         let n_frames = params.n_frames;
         let decoder = get_codecs()
             .make(params, &DecoderOptions::default())
@@ -128,7 +122,6 @@ impl Decoder {
             decoder,
             track_id,
             sample_rate,
-            channels,
             n_frames,
             eof: false,
             served_frames: 0,
@@ -168,10 +161,6 @@ impl Decoder {
 
     pub fn duration(&self) -> Option<f64> {
         self.n_frames.map(|n| n as f64 / self.sample_rate as f64)
-    }
-
-    pub fn leftover_len(&self) -> usize {
-        self.leftover.len() / 2
     }
 
     /// Sirve hasta `out.len()/2` frames estéreo en `out` (interleaved L,R).
@@ -215,7 +204,7 @@ impl Decoder {
                         return Ok(false);
                     }
                     resets += 1;
-                    let _ = self.reset_pos();
+                    self.reset_pos();
                     continue;
                 }
                 Err(_) => return Ok(false),
@@ -230,7 +219,7 @@ impl Decoder {
                         return Ok(false);
                     }
                     resets += 1;
-                    let _ = self.reset_pos();
+                    self.reset_pos();
                     continue;
                 }
                 Err(_) => return Err("error decodificando".into()),
@@ -238,7 +227,12 @@ impl Decoder {
             let spec = *decoded.spec();
             let frames = decoded.frames();
             let ch = spec.channels.count().clamp(1, 8);
-            if self.sbuf.as_ref().map(|s| s.capacity() < frames * ch).unwrap_or(true) {
+            if self
+                .sbuf
+                .as_ref()
+                .map(|s| s.capacity() < frames * ch)
+                .unwrap_or(true)
+            {
                 self.sbuf = Some(SampleBuffer::<f32>::new(frames as u64, spec));
             }
             let sb = self.sbuf.as_mut().unwrap();
@@ -247,21 +241,20 @@ impl Decoder {
             let stereo = sb
                 .samples()
                 .chunks(ch)
-                .map(|frm| {
+                .flat_map(|frm| {
                     let mut l = frm[0];
                     let mut r = if ch > 1 { frm[1] } else { frm[0] };
                     if ch >= 3 {
-                        let c = frm[2] * 0.70710678;
+                        let c = frm[2] * std::f32::consts::FRAC_1_SQRT_2;
                         l += c;
                         r += c;
                     }
                     if ch >= 6 {
-                        l += frm[4] * 0.70710678;
-                        r += frm[5] * 0.70710678;
+                        l += frm[4] * std::f32::consts::FRAC_1_SQRT_2;
+                        r += frm[5] * std::f32::consts::FRAC_1_SQRT_2;
                     }
                     [l, r]
                 })
-                .flatten()
                 .collect::<Vec<f32>>();
             self.leftover = stereo;
             return Ok(true);
@@ -297,7 +290,7 @@ fn read_tags(mut md: Metadata<'_>) -> Tags {
     }
     let get = |keys: &[&str]| -> Option<String> {
         for (k, v) in &by_key {
-            if keys.iter().any(|kk| *kk == k.as_str()) && !v.trim().is_empty() {
+            if keys.contains(&k.as_str()) && !v.trim().is_empty() {
                 return Some(v.trim().to_string());
             }
         }
@@ -310,7 +303,9 @@ fn read_tags(mut md: Metadata<'_>) -> Tags {
 }
 
 pub fn duration_of(opened: &Opened) -> Option<f64> {
-    opened.n_frames.map(|n| n as f64 / opened.sample_rate as f64)
+    opened
+        .n_frames
+        .map(|n| n as f64 / opened.sample_rate as f64)
 }
 
 /// Mide la duración real decodificando el archivo completo (para formatos sin

@@ -12,6 +12,9 @@ pub struct Track {
     pub album: String,
     /// duración en segundos (None si el archivo no la declara)
     pub dur: Option<f64>,
+    /// sonoridad integrada (LUFS, EBU R128) para ReplayGain 2.0
+    #[serde(default)]
+    pub rg: Option<f64>,
 }
 
 fn tag_or(t: &Option<String>, fallback: &str) -> String {
@@ -32,7 +35,11 @@ pub fn probe(path: &Path) -> Option<Track> {
         Some(_) => decode::duration_of(&opened),
         None => decode::measure_duration_secs(path),
     };
-    let Tags { title, artist, album } = opened.tags;
+    let Tags {
+        title,
+        artist,
+        album,
+    } = opened.tags;
     let _ = dec;
     Some(Track {
         path: path.to_string_lossy().to_string(),
@@ -40,6 +47,7 @@ pub fn probe(path: &Path) -> Option<Track> {
         artist: tag_or(&artist, ""),
         album: tag_or(&album, ""),
         dur,
+        rg: None,
     })
 }
 

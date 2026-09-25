@@ -1,13 +1,12 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crossbeam_channel::Receiver;
 use tauri::Emitter;
 
-use crate::decode::{Decoder, Tags, duration_of};
+use crate::decode::{duration_of, Decoder, Tags};
 use crate::dsp;
 
 pub fn log_msg(msg: &str) {
@@ -18,7 +17,11 @@ pub fn log_msg(msg: &str) {
     let line = format!("[{stamp}] {msg}\n");
     let path = std::env::temp_dir().join("enn-debug.log");
     use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = f.write_all(line.as_bytes());
     }
     eprintln!("enn: {msg}");
@@ -64,8 +67,16 @@ pub enum EngineCmd {
         dur: Option<f64>,
         gain_db: f32,
     },
+    /// Precarga la siguiente pista para el crossfade (C3): se mezcla solapada
+    /// durante los últimos `fade_secs` de la pista en curso.
+    Prime {
+        dec: Decoder,
+        path: PathBuf,
+        tags: Tags,
+        dur: Option<f64>,
+        gain_db: f32,
+    },
     Seek(f64),
-    Shutdown,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -80,6 +91,7 @@ pub struct CurrentTrack {
     pub path: PathBuf,
     pub title: String,
     pub artist: String,
+    pub album: String,
     pub state: PlayState,
     pub dur: Option<f64>,
     pub ended: bool,
@@ -90,90 +102,144 @@ pub struct CurrentTrack {
 
 pub struct Core {
     pub cur: Option<CurrentTrack>,
+    /// Pista preparada para el crossfade (C3); invisible para la UI hasta que
+    /// la pista en curso termina y es promovida.
+    pub next: Option<CurrentTrack>,
     pub master: f32,
     pub balance: f32,
     pub eq: dsp::Eq,
     pub out_rate: u32,
     pub out_channels: u16,
     cmds: VecDeque<EngineCmd>,
-    resampler: dsp::Resampler,
+    /// Tublería de remuestreo por pista: índice 0 = cur, 1 = next.
+    resamplers: [dsp::Resampler; 2],
     scratch: Vec<f32>,
-    inbuf: Vec<f32>,
+    /// búfer de mezcla de la pista preparada (crossfade)
+    scratch2: Vec<f32>,
+    inbufs: [Vec<f32>; 2],
     /// Muestras estéreo ya leídas del decodificador pero aún no consumidas por el remuestreador.
-    carry: Vec<f32>,
-    /// Frame de archivo donde empieza `carry` (base del segmento).
-    seg_base: u64,
+    carries: [Vec<f32>; 2],
+    /// Frame de archivo donde empieza `carries[pipe]` (base del segmento).
+    seg_bases: [u64; 2],
     /// Segundos de fade de entrada al cambiar de canción (0 = apagado).
     pub fade_secs: f32,
     pub pending_event: Option<&'static str>,
     runtime_error: Option<String>,
-    pub dead: bool,
     pub renders: u64,
+    /// anillo mono (L+R)/2 para el analizador de espectro (A5)
+    pub spec_buf: Vec<f32>,
+    pub spec_pos: usize,
 }
 
 impl Core {
     fn new(out_rate: u32, out_channels: u16) -> Self {
         Core {
             cur: None,
+            next: None,
             master: 1.0,
             balance: 0.0,
             eq: dsp::Eq::new(out_rate as f64),
             out_rate,
             out_channels: out_channels.max(1),
             cmds: VecDeque::new(),
-            resampler: dsp::Resampler::new(out_rate as f64, out_rate as f64),
+            resamplers: [
+                dsp::Resampler::new(out_rate as f64, out_rate as f64),
+                dsp::Resampler::new(out_rate as f64, out_rate as f64),
+            ],
             scratch: Vec::new(),
-            inbuf: Vec::new(),
-            carry: Vec::new(),
-            seg_base: 0,
+            scratch2: Vec::new(),
+            inbufs: [Vec::new(), Vec::new()],
+            carries: [Vec::new(), Vec::new()],
+            seg_bases: [0, 0],
             fade_secs: 0.0,
             pending_event: None,
             runtime_error: None,
-            dead: false,
             renders: 0,
+            spec_buf: vec![0.0; 8192],
+            spec_pos: 0,
+        }
+    }
+
+    /// Monta una pista decodificada en la tubería `pipe` (0 = cur, 1 = next).
+    fn load_track(
+        &mut self,
+        pipe: usize,
+        mut dec: Decoder,
+        path: PathBuf,
+        tags: Tags,
+        dur: Option<f64>,
+        gain_db: f32,
+    ) {
+        log_msg(&format!(
+            "ENGINE {} cmd: {} (dur={dur:?}, sr={})",
+            if pipe == 0 { "play" } else { "prime" },
+            path.display(),
+            dec.sample_rate
+        ));
+        let out_rate = self.out_rate.max(1) as f64;
+        let in_rate = dec.sample_rate.max(1) as f64;
+        self.resamplers[pipe] = dsp::Resampler::new(in_rate, out_rate);
+        self.carries[pipe].clear();
+        self.seg_bases[pipe] = 0;
+        self.eq.set_sr(out_rate);
+        let title = tags
+            .title
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            });
+        let artist = tags.artist.unwrap_or_default();
+        dec.served_frames = 0;
+        let track = CurrentTrack {
+            dec,
+            path,
+            title,
+            artist,
+            album: tags.album.unwrap_or_default(),
+            state: PlayState::Playing,
+            dur,
+            ended: false,
+            pos_sec: 0.0,
+            gain_lin: (10f32).powf(gain_db.clamp(-30.0, 30.0) / 20.0),
+            fade_secs: self.fade_secs.max(0.0),
+        };
+        if pipe == 0 {
+            self.cur = Some(track);
+        } else {
+            self.next = Some(track);
         }
     }
 
     fn drain_cmds(&mut self) {
         while let Some(c) = self.cmds.pop_front() {
             match c {
-                EngineCmd::Play { mut dec, path, tags, dur, gain_db } => {
-                    log_msg(&format!(
-                        "ENGINE play cmd: {} (dur={dur:?}, sr={})",
-                        path.display(),
-                        dec.sample_rate
-                    ));
-                    let out_rate = self.out_rate.max(1) as f64;
-                    let in_rate = dec.sample_rate.max(1) as f64;
-                    self.resampler = dsp::Resampler::new(in_rate, out_rate);
-                    self.carry.clear();
-                    self.seg_base = 0;
-                    self.eq.set_sr(out_rate);
-                    let title = tags
-                        .title
-                        .filter(|s| !s.trim().is_empty())
-                        .unwrap_or_else(|| {
-                            path.file_stem()
-                                .map(|s| s.to_string_lossy().to_string())
-                                .unwrap_or_default()
-                        });
-                    let artist = tags.artist.unwrap_or_default();
-                    dec.served_frames = 0;
-                    self.cur = Some(CurrentTrack {
-                        dec,
-                        path,
-                        title,
-                        artist,
-                        state: PlayState::Playing,
-                        dur,
-                        ended: false,
-                        pos_sec: 0.0,
-                        gain_lin: (10f32).powf(gain_db.clamp(-30.0, 30.0) / 20.0),
-                        fade_secs: self.fade_secs.max(0.0),
-                    });
+                EngineCmd::Play {
+                    dec,
+                    path,
+                    tags,
+                    dur,
+                    gain_db,
+                } => {
+                    self.next = None; // la cola manual siempre gana
+                    self.load_track(0, dec, path, tags, dur, gain_db);
                     self.pending_event = Some("track");
                 }
+                EngineCmd::Prime {
+                    dec,
+                    path,
+                    tags,
+                    dur,
+                    gain_db,
+                } => {
+                    // solo si sigue sonando la misma pista para la que se preparó
+                    if self.cur.is_some() {
+                        self.load_track(1, dec, path, tags, dur, gain_db);
+                    }
+                }
                 EngineCmd::Seek(secs) => {
+                    self.next = None; // una búsqueda invalida la pista preparada
                     if let Some(c) = &mut self.cur {
                         c.ended = false;
                         if secs <= 0.0 {
@@ -187,17 +253,18 @@ impl Core {
                             c.state = PlayState::Playing;
                             self.pending_event = Some("resume");
                         }
-                        self.resampler.reset();
-                        self.carry.clear();
-                        self.seg_base = 0;
+                        self.resamplers[0].reset();
+                        self.carries[0].clear();
+                        self.seg_bases[0] = 0;
                     }
-                }
-                EngineCmd::Shutdown => {
-                    self.dead = true;
-                    self.cur = None;
                 }
             }
         }
+    }
+
+    /// Petición de búsqueda encolada desde fuera del hilo de audio.
+    pub fn request_seek(&mut self, secs: f64) {
+        self.cmds.push_back(EngineCmd::Seek(secs));
     }
 
     /// Llamado desde el hilo de audio WASAPI. Rellena `data`.
@@ -212,49 +279,119 @@ impl Core {
             log_msg(&format!(
                 "ENGINE render #{} (state={:?})",
                 self.renders,
-                self.cur.as_ref().map(|t| t.state).unwrap_or(PlayState::Idle)
+                self.cur
+                    .as_ref()
+                    .map(|t| t.state)
+                    .unwrap_or(PlayState::Idle)
             ));
         }
         let mut scr = std::mem::take(&mut self.scratch);
         if scr.len() < frames * 2 {
             scr.resize(frames * 2, 0.0);
         }
+        let mut scr2 = std::mem::take(&mut self.scratch2);
+        if scr2.len() < frames * 2 {
+            scr2.resize(frames * 2, 0.0);
+        }
 
+        let or = self.out_rate.max(1) as f64;
         let mut cur = self.cur.take();
+        let mut next = self.next.take();
         let mut sound = false;
         let mut buf_start = 0.0;
         let mut gain_lin = 1.0f32;
         let mut fade_secs = 0.0f32;
+        let mut cur_dur: Option<f64> = None;
         if let Some(t) = &mut cur {
             if t.state == PlayState::Playing {
                 sound = true;
                 buf_start = t.pos_sec;
                 gain_lin = t.gain_lin;
                 fade_secs = t.fade_secs;
-                render_pull(self, t, &mut scr[..frames * 2], frames);
+                cur_dur = t.dur;
+                render_pull(self, 0, t, &mut scr[..frames * 2], frames);
+            }
+        }
+        // ¿ventana de crossfade? queda menos fade+buffer de pista y hay preparada
+        let xfade = next.is_some()
+            && fade_secs > 0.0
+            && cur_dur
+                .map(|d| d - buf_start <= fade_secs as f64 + frames as f64 / or)
+                .unwrap_or(false);
+        if xfade {
+            if let Some(n) = next.as_mut() {
+                render_pull(self, 1, n, &mut scr2[..frames * 2], frames);
             }
         }
         if !sound {
             for s in scr.iter_mut() {
                 *s = 0.0;
             }
+        } else if xfade {
+            // mezcla equal-power (potencia constante): sqrt(x) y sqrt(1-x)
+            // evitan la caída de sonoridad perceptible de la mezcla lineal
+            let g_cur = gain_lin;
+            let g_next = next.as_ref().map(|n| n.gain_lin).unwrap_or(1.0);
+            let fs = fade_secs as f64;
+            let end = cur_dur.unwrap_or(0.0);
+            for f in 0..frames {
+                let t = buf_start + f as f64 / or;
+                let x = ((end - t) / fs).clamp(0.0, 1.0) as f32;
+                let w = x.sqrt();
+                let wn = (1.0f32 - x).sqrt();
+                scr[f * 2] = scr[f * 2] * w * g_cur + scr2[f * 2] * wn * g_next;
+                scr[f * 2 + 1] = scr[f * 2 + 1] * w * g_cur + scr2[f * 2 + 1] * wn * g_next;
+            }
         } else {
-            // envolvente de entrada (fade) + ganancia relativa de la pista
-            let need_env = fade_secs > 0.0 && buf_start < fade_secs as f64;
-            if gain_lin != 1.0 || need_env {
-                let or = self.out_rate.max(1) as f64;
+            // envolvente de entrada/salida (fade) + ganancia relativa de la pista
+            let track_dur = cur_dur;
+            let near_start = fade_secs > 0.0 && buf_start < fade_secs as f64;
+            let near_end = match (fade_secs, track_dur) {
+                (fs, Some(d)) if fs > 0.0 => buf_start > d - fs as f64,
+                _ => false,
+            };
+            if gain_lin != 1.0 || near_start || near_end {
                 for f in 0..frames {
                     let mut g = gain_lin;
-                    if need_env {
-                        let t = (buf_start + f as f64 / or) as f32;
-                        g *= (t / fade_secs).clamp(0.0, 1.0);
+                    if fade_secs > 0.0 {
+                        let t = buf_start + f as f64 / or;
+                        let fs = fade_secs as f64;
+                        // fundido de entrada
+                        if t < fs {
+                            g *= (t / fs).clamp(0.0, 1.0) as f32;
+                        }
+                        // fundido de salida (C3): último tramo de la pista
+                        if let Some(d) = track_dur {
+                            let rem = d - t;
+                            if rem < fs {
+                                g *= (rem.max(0.0) / fs).clamp(0.0, 1.0) as f32;
+                            }
+                        }
                     }
                     scr[f * 2] *= g;
                     scr[f * 2 + 1] *= g;
                 }
             }
         }
+        // la pista en curso murió durante el crossfade: la preparada toma su sitio
+        if xfade
+            && cur
+                .as_ref()
+                .map(|t| t.state != PlayState::Playing)
+                .unwrap_or(false)
+        {
+            if let Some(mut n) = next.take() {
+                n.state = PlayState::Playing;
+                self.resamplers.swap(0, 1);
+                self.inbufs[0] = std::mem::take(&mut self.inbufs[1]);
+                self.carries[0] = std::mem::take(&mut self.carries[1]);
+                self.seg_bases[0] = self.seg_bases[1];
+                cur = Some(n);
+                self.pending_event = Some("track");
+            }
+        }
         self.cur = cur;
+        self.next = next;
 
         let gl = 1.0 - self.balance.max(0.0);
         let gr = 1.0 + self.balance.min(0.0);
@@ -273,14 +410,32 @@ impl Core {
             };
             *out = T::from_audio((s * m).clamp(-1.0, 1.0));
         }
+        // alimentar el anillo del analizador de espectro (mono, barato)
+        {
+            let ring_len = self.spec_buf.len();
+            let n = frames.min(ring_len);
+            for i in 0..n {
+                let v = (scr[i * 2] + scr[i * 2 + 1]) * 0.5;
+                self.spec_buf[(self.spec_pos + i) % ring_len] = v;
+            }
+            self.spec_pos = (self.spec_pos + n) % ring_len;
+        }
         self.scratch = scr;
+        self.scratch2 = scr2;
     }
 }
 
-/// Decodifica + remuestrea hasta `frames` frames estéreo para `out`.
-/// La cadena de muestras es continua: `core.carry` conserva lo leído y no consumido.
-fn render_pull(core: &mut Core, cur: &mut CurrentTrack, out: &mut [f32], frames: usize) {
-    let ratio = core.resampler.ratio;
+/// Decodifica + remuestrea hasta `frames` frames estéreo para `out` usando la
+/// tubería `pipe` (0 = pista en curso, 1 = preparada para crossfade).
+/// La cadena de muestras es continua: `core.carries[pipe]` conserva lo leído y no consumido.
+fn render_pull(
+    core: &mut Core,
+    pipe: usize,
+    cur: &mut CurrentTrack,
+    out: &mut [f32],
+    frames: usize,
+) {
+    let ratio = core.resamplers[pipe].ratio;
     let mut produced = 0usize;
     let mut guard = 0u32;
     loop {
@@ -289,21 +444,23 @@ fn render_pull(core: &mut Core, cur: &mut CurrentTrack, out: &mut [f32], frames:
         }
         guard += 1;
 
-        let have = core.carry.len() / 2;
+        let have = core.carries[pipe].len() / 2;
         let remain = frames - produced;
-        // entrada necesaria para lo que queda de salida (más un pequeño margen)
-        let want = (((remain as f64) * ratio).ceil() as usize + 2).max(have);
+        // entrada necesaria para lo que queda de salida (más el histórico
+        // que exige la ventana del remuestreador polifásico, ~64 frames)
+        let want = (((remain as f64) * ratio).ceil() as usize + 70).max(have);
         let need_pull = want - have;
 
         // monta el segmento: arrastre + datos nuevos del decodificador
-        if core.inbuf.len() < want * 2 + 8 {
-            core.inbuf.resize(want * 2 + 8, 0.0);
+        if core.inbufs[pipe].len() < want * 2 + 8 {
+            core.inbufs[pipe].resize(want * 2 + 8, 0.0);
         }
         if have > 0 {
-            core.inbuf[..have * 2].copy_from_slice(&core.carry);
+            core.inbufs[pipe][..have * 2].copy_from_slice(&core.carries[pipe]);
         }
         let got = if need_pull > 0 {
-            cur.dec.pull_stereo(&mut core.inbuf[have * 2..have * 2 + need_pull * 2])
+            cur.dec
+                .pull_stereo(&mut core.inbufs[pipe][have * 2..have * 2 + need_pull * 2])
         } else {
             0
         };
@@ -322,26 +479,47 @@ fn render_pull(core: &mut Core, cur: &mut CurrentTrack, out: &mut [f32], frames:
         }
 
         let (consumed, prod) = {
-            let src = &mut core.inbuf[..total * 2];
-            core.resampler
-                .process(src, total, &mut out[produced * 2..], core.seg_base as usize)
+            let src = &mut core.inbufs[pipe][..total * 2];
+            core.resamplers[pipe].process(
+                src,
+                total,
+                &mut out[produced * 2..],
+                core.seg_bases[pipe] as usize,
+            )
         };
+        // fin de archivo real: el decodificador se agotó y el remuestreador
+        // ya no puede producir nada más (ni siquiera con la cola retenida)
+        if got == 0 && cur.dec.eof && prod == 0 {
+            if !cur.ended {
+                cur.ended = true;
+                cur.state = PlayState::Idle;
+                if pipe == 0 {
+                    // la pista preparada (si existe) se promociona en render_into
+                    core.pending_event = Some("ended");
+                }
+            }
+            for s in out.iter_mut().skip(produced * 2) {
+                *s = 0.0;
+            }
+            return;
+        }
         if prod > 0 {
             produced += prod;
             cur.pos_sec += prod as f64 / core.out_rate.max(1) as f64;
         }
         // conserva lo no consumido para la siguiente iteración (continua, sin huecos)
         if consumed < total {
-            let tail = &core.inbuf[consumed * 2..total * 2];
-            if core.carry.len() < tail.len() {
-                core.carry.resize(tail.len(), 0.0);
+            let tail_len = (total - consumed) * 2;
+            let src_tail = core.inbufs[pipe][consumed * 2..total * 2].to_vec();
+            if core.carries[pipe].len() < tail_len {
+                core.carries[pipe].resize(tail_len, 0.0);
             }
-            core.carry[..tail.len()].copy_from_slice(tail);
-            core.carry.truncate(tail.len());
-            core.seg_base += consumed as u64;
+            core.carries[pipe][..tail_len].copy_from_slice(&src_tail);
+            core.carries[pipe].truncate(tail_len);
+            core.seg_bases[pipe] += consumed as u64;
         } else {
-            core.carry.clear();
-            core.seg_base += consumed as u64;
+            core.carries[pipe].clear();
+            core.seg_bases[pipe] += consumed as u64;
         }
         if prod == 0 && consumed == 0 {
             // el remuestreador no pudo avanzar: no hay datos útiles nuevos
@@ -375,7 +553,11 @@ pub struct Player {
     device_name: Mutex<Option<String>>,
     pub app: tauri::AppHandle,
     stop_tx: Mutex<Option<crossbeam_channel::Sender<()>>>,
-    pub shutting_down: Arc<AtomicBool>,
+    media_stop: Mutex<Option<crossbeam_channel::Sender<()>>>,
+    /// salida WASAPI exclusiva (bit-perfect), A1
+    pub exclusive: Mutex<bool>,
+    /// tasa nativa de la pista en curso para reabrir el stream (Hi-Res, A3)
+    pub desired_rate: Mutex<Option<u32>>,
 }
 
 /// Devuelve los nombres de los dispositivos de salida disponibles.
@@ -488,7 +670,8 @@ fn audio_owner(
         cpal::SampleFormat::F32 => build!(f32),
         cpal::SampleFormat::I16 => build!(i16),
         other => {
-            let m = format!("el dispositivo «{dev_name}» usa un formato aún no soportado: {other:?}");
+            let m =
+                format!("el dispositivo «{dev_name}» usa un formato aún no soportado: {other:?}");
             log_msg(&m);
             let _ = ok_tx.send(Err(m));
             return;
@@ -534,8 +717,31 @@ impl Player {
             device_name: Mutex::new(None),
             app,
             stop_tx: Mutex::new(None),
-            shutting_down: Arc::new(AtomicBool::new(false)),
+            media_stop: Mutex::new(None),
+            exclusive: Mutex::new(false),
+            desired_rate: Mutex::new(None),
         }
+    }
+
+    /// Activa/desactiva la salida exclusiva. No abre el dispositivo aquí:
+    /// al arrancar la app sería lo que más retrasa la ventana; el stream se
+    /// abre de forma perezosa en la primera reproducción (play_path).
+    /// Si hay pista en curso, sí reinicia para que el cambio se oiga ya.
+    pub fn set_exclusive(&self, on: bool) -> Result<(), String> {
+        let prev = self.exclusive_on();
+        *self.exclusive.lock().unwrap() = on;
+        if prev == on {
+            return Ok(());
+        }
+        self.streams.lock().unwrap().take();
+        if self.core.lock().unwrap().cur.is_some() {
+            self.ensure_streams()?;
+        }
+        Ok(())
+    }
+
+    pub fn exclusive_on(&self) -> bool {
+        *self.exclusive.lock().unwrap()
     }
 
     pub fn start(&self) {
@@ -544,6 +750,10 @@ impl Player {
         let (tx, rx) = crossbeam_channel::bounded::<()>(1);
         *self.stop_tx.lock().unwrap() = Some(tx);
         std::thread::spawn(move || reporter_loop(app, core, rx));
+        // Controles multimedia del sistema (SMTC/MPRIS) con su propio canal de parada.
+        let (mtx, mrx) = crossbeam_channel::bounded::<()>(1);
+        *self.media_stop.lock().unwrap() = Some(mtx);
+        crate::media_keys::spawn(self.app.clone(), self.core.clone(), mrx);
     }
 
     /// Cambia de dispositivo de salida y reinicia el stream de audio.
@@ -563,6 +773,29 @@ impl Player {
             return Ok(());
         }
         let core = self.core.clone();
+
+        // salida exclusiva (A1): tasa nativa del archivo (A3); si el
+        // dispositivo no acepta formatos exclusivos, recae en compartido
+        if self.exclusive_on() {
+            let want_rate = self.desired_rate.lock().unwrap().unwrap_or(48000);
+            let (ok_tx, ok_rx) = crossbeam_channel::bounded::<Result<(), String>>(1);
+            let (kill_tx, kill_rx) = crossbeam_channel::bounded::<()>(1);
+            {
+                let core = core.clone();
+                std::thread::spawn(move || {
+                    crate::exclusive::open(&core, want_rate, 2, &ok_tx, &kill_rx);
+                });
+            }
+            match ok_rx.recv_timeout(Duration::from_secs(12)) {
+                Ok(Ok(())) => {
+                    *guard = Some(kill_tx);
+                    return Ok(());
+                }
+                Ok(Err(e)) => log_msg(&format!("exclusiva no disponible, compartida: {e}")),
+                Err(_) => log_msg("exclusiva sin respuesta, compartida"),
+            }
+        }
+
         let want = self.device_name.lock().unwrap().clone();
         let (ok_tx, ok_rx) = crossbeam_channel::bounded::<Result<(), String>>(1);
         let (kill_tx, kill_rx) = crossbeam_channel::bounded::<()>(1);
@@ -598,15 +831,49 @@ impl Player {
         }
     }
 
-    pub fn play_path(&self, path: &Path, gain_db: f32, dur_hint: Option<f64>) -> Result<(), String> {
-        self.ensure_streams()?;
+    pub fn play_path(
+        &self,
+        path: &Path,
+        gain_db: f32,
+        dur_hint: Option<f64>,
+    ) -> Result<(), String> {
         let (dec, opened) = Decoder::open(path).map_err(|e| e.to_string())?;
+        // en exclusiva, el stream debe abrirse a la tasa nativa del archivo:
+        // si cambió respecto a la pista anterior, se reabre el dispositivo
+        if self.exclusive_on() {
+            let mut want = self.desired_rate.lock().unwrap();
+            if *want != Some(dec.sample_rate) {
+                *want = Some(dec.sample_rate);
+                self.streams.lock().unwrap().take();
+            }
+        }
+        self.ensure_streams()?;
         // si el archivo no declara duración pero el llamador la conoce (medida), se usa
         let dur = duration_of(&opened).or(dur_hint);
         if let Ok(mut c) = self.core.lock() {
             c.runtime_error = None;
         }
         self.push(EngineCmd::Play {
+            dec,
+            path: path.to_path_buf(),
+            tags: opened.tags,
+            dur,
+            gain_db,
+        });
+        Ok(())
+    }
+
+    /// Precarga la siguiente pista para el crossfade (C3). Si para cuando llega
+    /// el comando ya cambió la pista en curso, el motor la ignora.
+    pub fn prime_path(
+        &self,
+        path: &Path,
+        gain_db: f32,
+        dur_hint: Option<f64>,
+    ) -> Result<(), String> {
+        let (dec, opened) = Decoder::open(path).map_err(|e| e.to_string())?;
+        let dur = duration_of(&opened).or(dur_hint);
+        self.push(EngineCmd::Prime {
             dec,
             path: path.to_path_buf(),
             tags: opened.tags,
@@ -674,6 +941,13 @@ impl Player {
             c.eq.treble_db = treble;
         }
     }
+
+    /// Recoloca una banda paramétrica del EQ (C5).
+    pub fn set_param_band(&self, index: usize, freq: f64, q: f64, gain_db: f32) {
+        if let Ok(mut c) = self.core.lock() {
+            c.eq.set_param_band(index, freq, q, gain_db);
+        }
+    }
 }
 
 pub struct Status {
@@ -711,9 +985,6 @@ fn reporter_loop(app: tauri::AppHandle, core: Arc<Mutex<Core>>, rx: Receiver<()>
                 Ok(c) => c,
                 Err(_) => continue,
             };
-            if c.dead {
-                return;
-            }
             let event = c.pending_event.take();
             let err = c.runtime_error.take();
             let st = Status {
@@ -748,6 +1019,100 @@ fn reporter_loop(app: tauri::AppHandle, core: Arc<Mutex<Core>>, rx: Receiver<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+
+    /// WAV PCM16 estéreo con seno a `freq` Hz (para pruebas de crossfade).
+    fn write_sine_wav(path: &Path, seconds: u32, freq: f32) {
+        let sr: u32 = 48000;
+        let mut f = std::fs::File::create(path).unwrap();
+        let bytes: u32 = sr * 2 * seconds;
+        f.write_all(b"RIFF").unwrap();
+        f.write_all(&(36 + bytes).to_le_bytes()).unwrap();
+        f.write_all(b"WAVEfmt ").unwrap();
+        f.write_all(&16u32.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap();
+        f.write_all(&2u16.to_le_bytes()).unwrap();
+        f.write_all(&sr.to_le_bytes()).unwrap();
+        f.write_all(&(sr * 4).to_le_bytes()).unwrap();
+        f.write_all(&4u16.to_le_bytes()).unwrap();
+        f.write_all(&16u16.to_le_bytes()).unwrap();
+        f.write_all(b"data").unwrap();
+        f.write_all(&bytes.to_le_bytes()).unwrap();
+        for n in 0..sr * seconds {
+            let v = 0.4 * (2.0 * std::f32::consts::PI * freq * n as f32 / sr as f32).sin();
+            let bits = ((v * 32767.0) as i16).to_le_bytes();
+            f.write_all(&bits).unwrap();
+            f.write_all(&bits).unwrap();
+        }
+    }
+
+    /// C3: la pista preparada se promociona al morir la actual, con crossfade.
+    #[test]
+    fn crossfade_promotes_primed() {
+        let wa = std::env::temp_dir().join("enn-xfade-a.wav");
+        let wb = std::env::temp_dir().join("enn-xfade-b.wav");
+        write_sine_wav(&wa, 4, 440.0);
+        write_sine_wav(&wb, 4, 880.0);
+
+        let core = Arc::new(Mutex::new(Core::new(48000, 2)));
+        {
+            let (dec, opened) = crate::decode::Decoder::open(&wa).expect("abrir wav a");
+            let dur = duration_of(&opened);
+            let mut c = core.lock().unwrap();
+            c.fade_secs = 1.0;
+            c.cmds.push_back(EngineCmd::Play {
+                dec,
+                path: wa.clone(),
+                tags: Default::default(),
+                dur,
+                gain_db: 0.0,
+            });
+        }
+
+        let mut buf = vec![0.0f32; 480 * 2]; // 10 ms por render
+                                             // 2 s de reproducción normal
+        for _ in 0..200 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+        }
+        {
+            let c = core.lock().unwrap();
+            let p = c.cur.as_ref().unwrap().path.clone();
+            assert_eq!(p, wa, "sigue sonando la pista A");
+            assert!(c.next.is_none());
+        }
+        // preparar la pista B para el crossfade
+        {
+            let (dec, opened) = crate::decode::Decoder::open(&wb).expect("abrir wav b");
+            let dur = duration_of(&opened);
+            let mut c = core.lock().unwrap();
+            c.cmds.push_back(EngineCmd::Prime {
+                dec,
+                path: wb.clone(),
+                tags: Default::default(),
+                dur,
+                gain_db: 0.0,
+            });
+        }
+        // renderizar hasta la promoción (la A acaba a los 4 s)
+        let mut promoted = false;
+        for _ in 0..700 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+            let c = core.lock().unwrap();
+            if c.cur.as_ref().map(|t| t.path == wb).unwrap_or(false) {
+                promoted = true;
+                break;
+            }
+        }
+        assert!(promoted, "la pista B debería haber tomado el mando");
+        let c = core.lock().unwrap();
+        assert!(c.next.is_none(), "no debe quedar pista preparada");
+        assert!(
+            matches!(c.cur.as_ref().unwrap().state, PlayState::Playing),
+            "la pista B debe seguir sonando tras la promoción"
+        );
+        let _ = std::fs::remove_file(&wa);
+        let _ = std::fs::remove_file(&wb);
+    }
 
     fn write_silence_wav(path: &Path, seconds: u32) {
         use std::io::Write;
@@ -803,8 +1168,15 @@ mod tests {
             "decode_drain: total={total}, n_frames={:?}, última_vez_con_datos=#{last_nonzero_at:?}, primera_vez_vacío=#{zero_after_data:?}, rounds={round}",
             dec.n_frames
         ));
-        assert_eq!(total, dec.n_frames.unwrap_or(0), "no se drenó todo el archivo");
-        assert!(zero_after_data.unwrap_or(0) > last_nonzero_at.unwrap_or(0), "eof prematuro");
+        assert_eq!(
+            total,
+            dec.n_frames.unwrap_or(0),
+            "no se drenó todo el archivo"
+        );
+        assert!(
+            zero_after_data.unwrap_or(0) > last_nonzero_at.unwrap_or(0),
+            "eof prematuro"
+        );
     }
 
     #[test]
@@ -835,7 +1207,13 @@ mod tests {
 
         match ok_rx.recv_timeout(Duration::from_secs(8)) {
             Ok(Ok(())) => log_msg("selftest: stream OK"),
-            Ok(Err(e)) => panic!("selftest: error abriendo audio: {e}"),
+            Ok(Err(e)) => {
+                // sin tarjeta de sonido (p. ej. runners de CI): la prueba
+                // de audio real no aplica; el resto de la suite sigue cubriendo el motor
+                log_msg(&format!("selftest: sin dispositivo de audio, omitida: {e}"));
+                drop(kill_tx);
+                return;
+            }
             Err(_) => panic!("selftest: timeout abriendo audio"),
         }
 
@@ -868,7 +1246,10 @@ mod tests {
         log_msg(&format!(
             "selftest: FINAL renders={renders}, pos={pos:.3}s, state={state:?}"
         ));
-        assert!(renders > 200, "el callback de audio apenas se invocó: {renders}");
+        assert!(
+            renders > 200,
+            "el callback de audio apenas se invocó: {renders}"
+        );
         assert!(
             matches!(state, PlayState::Playing),
             "no está reproduciendo tras 3 s"
@@ -889,7 +1270,10 @@ mod tests {
             "selftest: tras fin -> state={:?}, pos={:.3}s, eof={}",
             st.0, st.1, st.2
         ));
-        assert!(matches!(st.0, PlayState::Idle), "debería estar idle al acabar");
+        assert!(
+            matches!(st.0, PlayState::Idle),
+            "debería estar idle al acabar"
+        );
         assert!(st.2, "eof debería ser true");
         assert!((st.1 - 4.0).abs() < 0.1, "pos final extraña: {}", st.1);
     }

@@ -11,11 +11,25 @@
     <main id="library-pane">
       <div id="lib-head">
         <input id="search" type="search" placeholder="Buscar en tu música…" autocomplete="off" spellcheck="false" />
+        <button id="btn-download" class="btn small" title="Descargar música (YouTube)">⬇ Descargar</button>
         <button id="btn-folder" class="btn small" title="Añadir carpeta a la biblioteca">📁 Carpeta</button>
         <button id="btn-files" class="btn small" title="Añadir archivos de audio">🎵 Archivos</button>
         <button id="btn-rescan" class="btn small" title="Re-escaneo de las carpetas">↻</button>
         <button id="btn-save-m3u" class="btn small" title="Guardar la cola como .m3u">💾</button>
         <button id="btn-open-m3u" class="btn small" title="Abrir playlist .m3u">📂</button>
+      </div>
+      <div id="view-tabs">
+        <button id="tab-all" class="tab active">Todas</button>
+        <button id="tab-artist" class="tab">Por artista</button>
+        <button id="tab-albums" class="tab">Álbumes</button>
+        <button id="tab-playlist" class="tab">Playlist</button>
+        <button id="tab-activity" class="tab">Actividad</button>
+      </div>
+      <div id="pl-bar" class="hidden">
+        <input id="pl-name" type="text" placeholder="Nombre de la nueva playlist…" autocomplete="off" spellcheck="false" />
+        <button id="btn-pl-create" class="btn small primary">Crear playlist</button>
+        <button id="btn-pl-add" class="btn small" title="Añade la pista que está sonando a la playlist seleccionada">＋ Pista actual</button>
+        <span id="pl-info" class="pl-info"></span>
       </div>
       <div id="lib-meta" class="pane-meta"></div>
       <ul id="lib-list" class="track-list"></ul>
@@ -30,6 +44,7 @@
       <div class="panel-head">
         <span id="queue-title">Siguientes</span>
         <div class="panel-actions">
+          <button id="btn-radio" class="icon-btn" title="Modo radio: al acabar la cola, sugiere música parecida de tu biblioteca">📻</button>
           <button id="btn-clear" class="icon-btn" title="Vaciar la cola">✕</button>
         </div>
       </div>
@@ -42,11 +57,34 @@
     <section id="mixer" class="mixer hidden">
       <div class="mix-row">
         <div class="mix-tone">
+          <canvas id="spectrum" width="280" height="56"></canvas>
           <label>Graves <input type="range" id="mix-bass" min="-12" max="12" step="0.5" value="0" /></label>
           <label>Agudos <input type="range" id="mix-treble" min="-12" max="12" step="0.5" value="0" /></label>
           <label>Balance <input type="range" id="mix-balance" min="-100" max="100" step="1" value="0" /></label>
           <label>Fade <input type="range" id="mix-fade" min="0" max="12" step="0.5" value="0" /><span id="mix-fade-val">0 s</span></label>
           <label>Pista <input type="range" id="mix-track" min="-12" max="12" step="1" value="0" disabled /><span id="mix-track-val">0 dB</span></label>
+          <label class="rg-row">
+            <input type="checkbox" id="mix-rg" checked />
+            <span>Normalizar volumen (ReplayGain)</span>
+            <button id="btn-rg-scan" class="btn small" title="Analiza la sonoridad de toda la biblioteca (EBU R128)">Analizar</button>
+          </label>
+          <label class="rg-row" title="Usa la sonoridad media del disco (artista + álbum) para conservar las diferencias internas del álbum">
+            <input type="checkbox" id="mix-rg-album" />
+            <span>Por álbum (conserva la dinámica del disco)</span>
+          </label>
+          <label class="rg-row">Temporizador
+            <select id="mix-sleep">
+              <option value="0">Apagado</option>
+              <option value="15">15 min</option>
+              <option value="30">30 min</option>
+              <option value="60">60 min</option>
+            </select>
+          </label>
+          <label class="rg-row" title="Salta el mezclador de Windows y abre el dispositivo a la tasa nativa del archivo (Hi-Res bit-perfect). Usa el dispositivo predeterminado del sistema.">
+            <input type="checkbox" id="mix-exclusive" />
+            <span>Salida exclusiva (bit-perfect)</span>
+          </label>
+          <span id="rg-status" class="rg-status"></span>
         </div>
         <div class="mix-eq">
           <div class="mix-eq-top">
@@ -64,6 +102,29 @@
             <button id="btn-eq-reset" class="icon-btn" title="Plano">0</button>
           </div>
           <div id="eq-bands" class="eq-bands"></div>
+          <div id="eq-param" class="eq-param"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="downloader" class="mixer hidden">
+      <div class="mix-row dl-row">
+        <div class="dl-left">
+          <div class="dl-title">
+            <span>▼ Descargar música</span>
+            <span id="dl-target" class="dl-target"></span>
+            <button id="btn-dl-dir" class="btn small" title="Cambiar carpeta de descarga">📂 Cambiar carpeta</button>
+          </div>
+          <div class="dl-url-row">
+            <input id="dl-url" type="text" placeholder="Pega un enlace o una lista completa (YouTube, SoundCloud, Bandcamp…)…" autocomplete="off" spellcheck="false" />
+            <select id="dl-fmt" title="Formato de destino">
+              <option value="m4a">M4A · mejor calidad</option>
+              <option value="mp3">MP3</option>
+              <option value="flac">FLAC sin pérdida</option>
+            </select>
+            <button id="btn-dl-start" class="btn primary small">Descargar</button>
+          </div>
+          <div id="dl-list" class="dl-list"></div>
         </div>
       </div>
     </section>
@@ -74,13 +135,18 @@
       <button id="btn-prev" class="ctl" title="Anterior">⏮</button>
       <button id="btn-play" class="ctl big" title="Reproducir/Pausar (espacio)">▶</button>
       <button id="btn-next" class="ctl" title="Siguiente">⏭</button>
-      <div class="ctl-meta" id="ctl-meta"><span id="mini-title">—</span></div>
+      <div class="ctl-meta" id="ctl-meta">
+        <img id="mini-art" class="mini-art hidden" alt="" />
+        <span id="mini-title">—</span>
+      </div>
       <div class="seekwrap">
         <span id="t-cur" class="tm">0:00</span>
+        <canvas id="seek-wave" height="10"></canvas>
         <input type="range" id="seek" min="0" max="1000" value="0" step="1" />
         <span id="t-dur" class="tm">0:00</span>
       </div>
       <button id="btn-mixer" class="ctl small" title="Mezclador (EQ, tono, balance, fade)">🎛️</button>
+      <button id="btn-mini" class="ctl small" title="Modo mini (doble clic aquí para volver)">🗕</button>
       <label class="dev" title="Dispositivo de salida">
         <select id="device">
           <option value="">Predeterminado</option>
@@ -93,6 +159,16 @@
     </footer>
 
     <div id="split" title="Arrastra para ajustar el ancho"></div>
+    <div id="ctx" class="ctx hidden"></div>
+    <div id="props" class="props hidden">
+      <div class="props-card">
+        <div class="props-head">
+          <span id="props-title">Propiedades</span>
+          <button id="props-close" class="icon-btn" title="Cerrar">✕</button>
+        </div>
+        <dl id="props-body"></dl>
+      </div>
+    </div>
     <div id="toast" class="hidden"></div>
   </div>
   <script src="app.js" type="module"></script>
