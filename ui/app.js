@@ -1710,17 +1710,37 @@ function setupDragDrop() {
 }
 
 // ---------------------------------------------------------------- divisor arrastrable
+// Ancho mínimo que se le respeta siempre a la biblioteca: sin esto, una
+// cola arrastrada a su máximo (700px) en una ventana grande se quedaba así
+// guardada en localStorage, y al abrir Enn en una ventana más angosta (o
+// encogerla luego) la biblioteca podía quedar con apenas ~150px de ancho.
+const MIN_LIBRARY_W = 480;
+
+function clampQw(w, appWidth) {
+  const maxQw = Math.max(220, appWidth - MIN_LIBRARY_W - 6);
+  return Math.max(220, Math.min(700, maxQw, w));
+}
+
 function setupDivider() {
   const split = $("split");
   const app = $("app");
   const saved = Number(localStorage.getItem("enn.qw") || 0);
-  if (saved >= 220 && saved <= 700) app.style.setProperty("--qw", saved + "px");
+  if (saved >= 220 && saved <= 700) {
+    app.style.setProperty("--qw", clampQw(saved, window.innerWidth) + "px");
+  }
+  // si la ventana se encoge después (o empieza más angosta que la cola
+  // guardada), reclampa en vez de dejar a la biblioteca sin espacio
+  window.addEventListener("resize", () => {
+    const cur = parseFloat(getComputedStyle(app).getPropertyValue("--qw")) || 330;
+    const clamped = clampQw(cur, window.innerWidth);
+    if (clamped !== cur) app.style.setProperty("--qw", clamped + "px");
+  });
   split.addEventListener("pointerdown", (e) => {
     split.classList.add("dragging");
     split.setPointerCapture(e.pointerId);
     const move = (ev) => {
       const rect = app.getBoundingClientRect();
-      const w = Math.max(220, Math.min(700, rect.right - ev.clientX));
+      const w = clampQw(rect.right - ev.clientX, rect.width);
       app.style.setProperty("--qw", w + "px");
       try { localStorage.setItem("enn.qw", String(Math.round(w))); } catch {}
     };
@@ -2330,6 +2350,25 @@ try {
 } catch {}
 
 // ---------------------------------------------------------------- modo mini (E1)
+// El tamaño mínimo del layout completo (980x600, ver tauri.conf.json — el
+// límite estático ahí es el de modo mini, 430x90, para no bloquearlo) se
+// aplica en tiempo de ejecución: si fuera estático siempre, no se podría
+// encoger a modo mini nunca. Sin este mínimo dinámico en modo normal, la
+// ventana se podía arrastrar hasta romper la barra de controles y el
+// selector de dispositivo/volumen quedaban recortados e inalcanzables.
+const NORMAL_MIN = { w: 980, h: 600 };
+const MINI_MIN = { w: 430, h: 90 };
+
+async function applyMinSize(w, h) {
+  try {
+    const { getCurrentWindow } = window.__TAURI__.window;
+    const { LogicalSize } = window.__TAURI__.dpi || {};
+    if (!LogicalSize) return;
+    await getCurrentWindow().setMinSize(new LogicalSize(w, h));
+  } catch {}
+}
+applyMinSize(NORMAL_MIN.w, NORMAL_MIN.h);
+
 const btnMini = $("btn-mini");
 if (btnMini) {
   const setMini = async (mini) => {
@@ -2338,6 +2377,9 @@ if (btnMini) {
       const { LogicalSize } = window.__TAURI__.dpi || {};
       const w = getCurrentWindow();
       document.body.classList.toggle("mini", mini);
+      // relajar el mínimo ANTES de encoger (si no, setSize se recorta al
+      // mínimo todavía vigente) y restaurarlo ANTES de volver a crecer
+      await applyMinSize(mini ? MINI_MIN.w : NORMAL_MIN.w, mini ? MINI_MIN.h : NORMAL_MIN.h);
       if (LogicalSize) {
         await w.setSize(mini ? new LogicalSize(430, 90) : new LogicalSize(1120, 680));
       }
