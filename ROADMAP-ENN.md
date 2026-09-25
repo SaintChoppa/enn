@@ -47,7 +47,7 @@ updated: 2026-09-25
 - [x] 🔴 `S` **Arreglar YouTube playlists ya mismo** — ✅ hecho: `resolve_entries()` expande la URL en una tarea por vídeo antes de encolar, reutilizando el progreso/cancelación existentes por tarea.
 - [ ] 🔴 `M` Soporte de importación de playlists de Spotify (ver sección 0).
 - [ ] 🟡 `M` Importar playlists de YouTube Music / Apple Music (Apple Music vía export de biblioteca; YT Music comparte backend con YouTube así que es casi gratis una vez resuelto lo anterior).
-- [ ] 🟡 `S` Detección de duplicados al descargar (si el título/artista ya existe en biblioteca, avisar antes de descargar de nuevo).
+- [x] 🟡 `S` Detección de duplicados al descargar — ✅ hecho: aviso (no bloqueante) cuando el título normalizado ya está en la biblioteca.
 - [ ] 🟢 `S` Normalización automática post-descarga: aplicar ReplayGain al vuelo a lo recién descargado en vez de esperar al escaneo manual.
 - [ ] 🟡 `M` Cola de descargas persistente entre reinicios (si cierras Enn a mitad de una descarga larga, hoy se pierde).
 - [ ] 🟢 `S` Elegir calidad de descarga (bitrate/formato) por descarga individual, no solo un formato global.
@@ -76,7 +76,7 @@ updated: 2026-09-25
 - [ ] 🟡 `M` Vistas adicionales: por **año**, **género**, **carpeta física**, y "compilaciones" (detectar Various Artists correctamente en vez de romper la agrupación por álbum).
 - [ ] 🔴 `M` **Smart playlists** basadas en reglas (ej: "rating > 4 AND género = Rock AND agregado en los últimos 30 días") — hoy solo hay M3U estático y playlists manuales.
 - [x] 🟡 `S` Sistema de **favoritos** por pista — ✅ hecho (★, filtro `favorito:`, campo `favorite: bool` con serde default). Rating numérico 1-5 queda pendiente si lo prefieres sobre el booleano.
-- [ ] 🟡 `M` Editor de etiquetas por lote (`tags_write` en `lib.rs` hoy es pista por pista) — selección múltiple → editar artista/álbum/género de golpe.
+- [x] 🟡 `M` Editor de etiquetas por lote — ✅ hecho: botón "✎ Lote" edita artista/álbum de todo lo que coincide con el filtro de búsqueda activo (esa es la "selección"). Género queda pendiente porque `Track` todavía no lo almacena.
 - [ ] 🟢 `S` Auto-completado de artista/álbum al escribir en el editor de etiquetas (usando lo ya indexado en biblioteca).
 - [ ] 🟡 `M` Detección de biblioteca duplicada (mismo archivo en dos carpetas indexadas, o mismo track en distinta calidad) con opción de "quedarme con la mejor versión".
 - [ ] 🟢 `S` Ordenar biblioteca por "más escuchado recientemente" además de "más reproducido total" (ya existe historial, falta esta vista derivada).
@@ -100,7 +100,7 @@ updated: 2026-09-25
 ## 7. ⌨️ Accesibilidad y atajos
 
 - [ ] 🟡 `M` Navegación completa por teclado en la lista de biblioteca (flechas, Enter para reproducir, Space para pausar) — confirmar cobertura actual en `app.js`.
-- [ ] 🟡 `S` Atributos ARIA en los controles principales (play/pause/volumen/seek) — un reproductor "framework-free" corre más riesgo de saltarse esto que uno con librería de UI.
+- [x] 🟡 `S` Atributos ARIA en los controles principales — ✅ hecho: `aria-label` en todos los controles icon-only, `aria-pressed` sincronizado en shuffle/repeat, label dinámico en play/pause.
 - [ ] 🟢 `S` Tamaño de fuente / densidad de lista ajustable (accesibilidad visual).
 - [ ] 🟢 `S` Soporte de lector de pantalla básico para los controles de transporte.
 
