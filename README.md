@@ -20,7 +20,7 @@ Most players force a trade-off: commercial catalog apps are heavy and phone home
 | Audio engine | Symphonia decode → f32 stereo → 10-band + 4 parametric biquad EQ (RBJ) → bass/treble/balance → polyphase resampler (64-tap Blackman-windowed sinc, 256 phases) → WASAPI shared (CPAL) or **exclusive bit-perfect** output at the file's native sample rate (44.1–192 kHz) |
 | Loudness | ReplayGain 2.0 (EBU R128 K-weighting, double gating) analyzed in background, applied per track |
 | Visualization | 48-band log spectrum analyzer (own radix-2 FFT) and per-track waveform in the seek bar |
-| Library | Recursive folder scan, tag reading, VBR-safe durations, advanced search (`artist:`, `album:`, `format:`), artist and album views with embedded cover art |
+| Library | Recursive folder scan, tag reading, VBR-safe durations, advanced search (`artist:`, `album:`, `format:`, `favorite:`), per-track favorites (★, survive rescans), artist and album views with embedded cover art |
 | Queue | Visible up-next list, drag to reorder, context menu, shuffle, repeat one/all, **radio mode** that keeps suggesting similar tracks |
 | History | Recently played and most-played smart lists |
 | Playlists | M3U/M3U8 import/export plus named app playlists with per-track add/remove |

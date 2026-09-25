@@ -660,6 +660,24 @@ function makeLibRow(track, i, opts = {}) {
   } else {
     li.addEventListener("click", () => playFromLibrary(i));
   }
+  const fav = document.createElement("button");
+  fav.className = "x fav" + (track.favorite ? " on" : "");
+  fav.textContent = track.favorite ? "★" : "☆";
+  fav.title = track.favorite ? "Quitar de favoritos" : "Marcar como favorita";
+  fav.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const next = !track.favorite;
+    try {
+      await invoke("lib_set_favorite", { path: track.path, favorite: next });
+      track.favorite = next;
+      fav.classList.toggle("on", next);
+      fav.textContent = next ? "★" : "☆";
+      fav.title = next ? "Quitar de favoritos" : "Marcar como favorita";
+    } catch (err) {
+      toast(`No se pudo actualizar favorito: ${err}`);
+    }
+  });
+  li.appendChild(fav);
   const add = document.createElement("button");
   add.className = "x";
   add.textContent = "+";
@@ -883,13 +901,14 @@ async function renderPlaylists() {
 
 el.search.addEventListener("input", () => {
   const q = el.search.value.trim().toLowerCase();
-  // búsqueda avanzada: artista:…, album:…, formato:… (prefijos) + texto libre
+  // búsqueda avanzada: artista:…, album:…, formato:…, favorito: (prefijos) + texto libre
   const filters = [];
   const free = [];
   for (const tok of q.split(/\s+/).filter(Boolean)) {
-    const m = tok.match(/^(artista|álbum|album|formato|ext):(.*)$/i);
+    const m = tok.match(/^(artista|álbum|album|formato|ext|favorito|favorita|fav):(.*)$/i);
     if (m) {
-      const key = m[1].normalize("NFD").replace(/\p{Diacritic}/gu, "");
+      let key = m[1].toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+      if (key === "favorita" || key === "fav") key = "favorito";
       filters.push([key, m[2].toLowerCase()]);
     } else {
       free.push(tok);
@@ -903,6 +922,11 @@ el.search.addEventListener("input", () => {
         return false;
       }
       for (const [key, val] of filters) {
+        // "favorito:" no necesita valor: su sola presencia filtra a favoritas
+        if (key === "favorito") {
+          if (!t.favorite) return false;
+          continue;
+        }
         if (!val) continue;
         if (key === "artista" && !(t.artist || "").toLowerCase().includes(val)) return false;
         if (key === "album" && !(t.album || "").toLowerCase().includes(val)) return false;

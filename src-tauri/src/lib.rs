@@ -222,6 +222,21 @@ fn probe_paths(paths: Vec<String>) -> library::ProbeMany {
     library::probe_many(&p)
 }
 
+/// Marca/desmarca una pista de la biblioteca como favorita.
+#[tauri::command]
+fn lib_set_favorite(app: tauri::AppHandle, path: String, favorite: bool) -> Result<(), String> {
+    let st = app.state::<EnnState>();
+    let mut lib = st.lib.lock().unwrap();
+    match lib.tracks.iter_mut().find(|t| t.path == path) {
+        Some(t) => {
+            t.favorite = favorite;
+            lib.save(&st.lib_path);
+            Ok(())
+        }
+        None => Err("la pista no está en la biblioteca".into()),
+    }
+}
+
 // ---------------------------------------------------------------- playlists
 
 #[tauri::command]
@@ -848,6 +863,7 @@ pub fn run() {
             lib_clear,
             lib_list,
             lib_folders,
+            lib_set_favorite,
             probe_paths,
             playlist_save,
             playlist_load,

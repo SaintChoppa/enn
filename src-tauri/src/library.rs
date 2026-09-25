@@ -15,6 +15,9 @@ pub struct Track {
     /// sonoridad integrada (LUFS, EBU R128) para ReplayGain 2.0
     #[serde(default)]
     pub rg: Option<f64>,
+    /// marcada como favorita por el usuario (no viene del archivo)
+    #[serde(default)]
+    pub favorite: bool,
 }
 
 fn tag_or(t: &Option<String>, fallback: &str) -> String {
@@ -48,6 +51,7 @@ pub fn probe(path: &Path) -> Option<Track> {
         album: tag_or(&album, ""),
         dur,
         rg: None,
+        favorite: false,
     })
 }
 
@@ -119,9 +123,18 @@ impl Library {
     }
 
     /// Re-escanea todas las carpetas indexadas desde cero.
+    ///
+    /// `rg` (ReplayGain) y `favorite` no vienen del archivo — solo viven en
+    /// este índice — así que antes de reconstruir se guarda una copia por
+    /// ruta y se restaura al terminar; de lo contrario cada refresh tiraba
+    /// el análisis de sonoridad ya hecho y obligaba a repetirlo entero.
     pub fn refresh(&mut self, path: &Path) -> AddResult {
+        let preserved: std::collections::HashMap<String, (Option<f64>, bool)> = self
+            .tracks
+            .drain(..)
+            .map(|t| (t.path, (t.rg, t.favorite)))
+            .collect();
         let folders = std::mem::take(&mut self.folders);
-        self.tracks.clear();
         let mut total = AddResult::default();
         for f in &folders {
             let r = self.scan_into(f, path);
@@ -129,6 +142,12 @@ impl Library {
             total.failed += r.failed;
             if total.first_error.is_none() {
                 total.first_error = r.first_error;
+            }
+        }
+        for t in self.tracks.iter_mut() {
+            if let Some((rg, favorite)) = preserved.get(&t.path) {
+                t.rg = *rg;
+                t.favorite = *favorite;
             }
         }
         self.save(path);
@@ -253,5 +272,58 @@ mod tests {
         }
         eprintln!("probe_real: escaneados={scanned} ok={ok} fail={fail}");
         assert!(fail < scanned, "demasiados fallos de apertura");
+    }
+
+    /// Escribe un WAV PCM16 mono mínimo y válido para pruebas deterministas.
+    fn write_tiny_wav(path: &Path) {
+        let sr: u32 = 44100;
+        let n_samples: u32 = 4410; // 0.1 s
+        let bytes = n_samples * 2;
+        let mut f = std::fs::File::create(path).unwrap();
+        use std::io::Write;
+        f.write_all(b"RIFF").unwrap();
+        f.write_all(&(36 + bytes).to_le_bytes()).unwrap();
+        f.write_all(b"WAVEfmt ").unwrap();
+        f.write_all(&16u32.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // PCM
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // mono
+        f.write_all(&sr.to_le_bytes()).unwrap();
+        f.write_all(&(sr * 2).to_le_bytes()).unwrap();
+        f.write_all(&2u16.to_le_bytes()).unwrap();
+        f.write_all(&16u16.to_le_bytes()).unwrap();
+        f.write_all(b"data").unwrap();
+        f.write_all(&bytes.to_le_bytes()).unwrap();
+        f.write_all(&vec![0u8; bytes as usize]).unwrap();
+    }
+
+    /// Regresión: `refresh()` reconstruye la biblioteca desde cero (rescan
+    /// completo), pero `rg` y `favorite` solo viven en el índice, no en el
+    /// archivo — antes de este fix un refresh los perdía y forzaba repetir
+    /// el análisis de ReplayGain de toda la biblioteca.
+    #[test]
+    fn refresh_preserves_rg_and_favorite() {
+        let dir = std::env::temp_dir().join(format!("enn_test_refresh_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("track.wav");
+        write_tiny_wav(&wav);
+        let lib_json = dir.join("library.json");
+
+        let mut lib = Library::default();
+        lib.scan_into(&dir.to_string_lossy(), &lib_json);
+        assert_eq!(lib.tracks.len(), 1, "debería haber indexado el wav de prueba");
+        {
+            let t = lib.tracks.first_mut().unwrap();
+            t.rg = Some(-14.2);
+            t.favorite = true;
+        }
+
+        lib.refresh(&lib_json);
+
+        assert_eq!(lib.tracks.len(), 1, "el refresh no debería duplicar ni perder la pista");
+        let t = &lib.tracks[0];
+        assert_eq!(t.rg, Some(-14.2), "rg debería sobrevivir al refresh");
+        assert!(t.favorite, "favorite debería sobrevivir al refresh");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
