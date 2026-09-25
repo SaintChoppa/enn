@@ -666,8 +666,12 @@ fn download_cancel(app: tauri::AppHandle, id: u64) -> Result<(), String> {
 #[tauri::command]
 fn get_state(app: tauri::AppHandle) -> serde_json::Value {
     let p = app.state::<Player>();
-    let core = p.core.lock().unwrap();
+    let mut core = p.core.lock().unwrap();
+    // se consume una sola vez (como un toast): dispositivo desconectado en
+    // caliente, o aviso de que el supervisor lo reconectó / no pudo hacerlo
+    let audio_error = core.runtime_error.take();
     serde_json::json!({
+        "audio_error": audio_error,
         "state": match core.cur.as_ref().map(|t| t.state) {
             Some(PlayState::Playing) => "playing",
             Some(PlayState::Paused) => "paused",

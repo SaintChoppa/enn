@@ -12,7 +12,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, TryRecvError};
 use windows::core::GUID;
 use windows::Win32::Media::Audio::{
     eConsole, eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -22,7 +22,7 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
 
-use crate::player::{log_msg, Core};
+use crate::player::{log_error, log_msg, Core};
 
 // subtipos KSDATAFORMAT (mmreg)
 const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: GUID =
@@ -81,6 +81,7 @@ pub fn open(
     want_channels: u16,
     ok_tx: &crossbeam_channel::Sender<Result<(), String>>,
     keep: &Receiver<()>,
+    err_tx: &crossbeam_channel::Sender<()>,
 ) {
     unsafe {
         // S_FALSE si ya estaba inicializado: correcto en ambos casos
@@ -165,9 +166,17 @@ pub fn open(
 
                 // bucle de render por sondeo: despierta cada ~2 ms (el período del
                 // dispositivo ronda los 10 ms; despertar tarde provocaría cortes)
+                let mut stopped_by_caller = false;
                 loop {
-                    if keep.try_recv().is_ok() {
-                        break;
+                    // el llamador detiene el hilo soltando `kill_tx` (nunca
+                    // enviando por él), así que la señal real es Disconnected,
+                    // no Ok — solo Empty significa "seguir reproduciendo"
+                    match keep.try_recv() {
+                        Ok(()) | Err(TryRecvError::Disconnected) => {
+                            stopped_by_caller = true;
+                            break;
+                        }
+                        Err(TryRecvError::Empty) => {}
                     }
                     let Ok(padding) = client.GetCurrentPadding() else {
                         break;
@@ -209,7 +218,12 @@ pub fn open(
                     }
                 }
                 let _ = client.Stop();
-                log_msg("WASAPI exclusivo: stream cerrado");
+                if stopped_by_caller {
+                    log_msg("WASAPI exclusivo: stream cerrado");
+                } else {
+                    log_error("WASAPI exclusivo: el dispositivo falló en caliente");
+                    let _ = err_tx.send(());
+                }
                 Ok(())
             }
         };

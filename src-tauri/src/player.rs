@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crossbeam_channel::Receiver;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 use crate::decode::{duration_of, Decoder, Tags};
 use crate::dsp;
@@ -174,7 +174,7 @@ pub struct Core {
     /// Segundos de fade de entrada al cambiar de canción (0 = apagado).
     pub fade_secs: f32,
     pub pending_event: Option<&'static str>,
-    runtime_error: Option<String>,
+    pub(crate) runtime_error: Option<String>,
     pub renders: u64,
     /// anillo mono (L+R)/2 para el analizador de espectro (A5)
     pub spec_buf: Vec<f32>,
@@ -608,6 +608,11 @@ pub struct Player {
     pub exclusive: Mutex<bool>,
     /// tasa nativa de la pista en curso para reabrir el stream (Hi-Res, A3)
     pub desired_rate: Mutex<Option<u32>>,
+    /// avisado por el hilo del stream cuando el dispositivo de audio falla en
+    /// caliente (auriculares Bluetooth que se apagan, USB desenchufado…);
+    /// el supervisor arrancado en `start()` reconecta solo con reintentos.
+    device_err_tx: crossbeam_channel::Sender<()>,
+    device_err_rx: Mutex<Option<crossbeam_channel::Receiver<()>>>,
 }
 
 /// Devuelve los nombres de los dispositivos de salida disponibles.
@@ -660,6 +665,7 @@ fn audio_owner(
     want: &Option<String>,
     ok_tx: &crossbeam_channel::Sender<Result<(), String>>,
     keep: &Receiver<()>,
+    err_tx: &crossbeam_channel::Sender<()>,
 ) {
     use cpal::traits::{DeviceTrait, StreamTrait};
 
@@ -695,6 +701,7 @@ fn audio_owner(
         ($ty:ty) => {{
             let c1 = core.clone();
             let c2 = core.clone();
+            let err_tx2 = err_tx.clone();
             dev.build_output_stream(
                 &cfg,
                 move |data: &mut [$ty], _| {
@@ -709,6 +716,7 @@ fn audio_owner(
                         c.runtime_error = Some(m);
                         c.pending_event = Some("state");
                     }
+                    let _ = err_tx2.send(());
                 },
                 None,
             )
@@ -761,6 +769,7 @@ fn audio_owner(
 
 impl Player {
     pub fn new(app: tauri::AppHandle) -> Self {
+        let (device_err_tx, device_err_rx) = crossbeam_channel::unbounded();
         Player {
             core: Arc::new(Mutex::new(Core::new(48000, 2))),
             streams: Mutex::new(None),
@@ -770,6 +779,8 @@ impl Player {
             media_stop: Mutex::new(None),
             exclusive: Mutex::new(false),
             desired_rate: Mutex::new(None),
+            device_err_tx,
+            device_err_rx: Mutex::new(Some(device_err_rx)),
         }
     }
 
@@ -804,6 +815,12 @@ impl Player {
         let (mtx, mrx) = crossbeam_channel::bounded::<()>(1);
         *self.media_stop.lock().unwrap() = Some(mtx);
         crate::media_keys::spawn(self.app.clone(), self.core.clone(), mrx);
+        // Supervisor de dispositivo: reconecta solo si el stream de audio
+        // muere en caliente (Bluetooth apagado, USB desenchufado…).
+        if let Some(err_rx) = self.device_err_rx.lock().unwrap().take() {
+            let app2 = self.app.clone();
+            std::thread::spawn(move || device_supervisor(app2, err_rx));
+        }
     }
 
     /// Cambia de dispositivo de salida y reinicia el stream de audio.
@@ -836,8 +853,9 @@ impl Player {
                 let (kill_tx, kill_rx) = crossbeam_channel::bounded::<()>(1);
                 {
                     let core = core.clone();
+                    let err_tx = self.device_err_tx.clone();
                     std::thread::spawn(move || {
-                        crate::exclusive::open(&core, want_rate, 2, &ok_tx, &kill_rx);
+                        crate::exclusive::open(&core, want_rate, 2, &ok_tx, &kill_rx, &err_tx);
                     });
                 }
                 match ok_rx.recv_timeout(Duration::from_secs(12)) {
@@ -861,9 +879,10 @@ impl Player {
         let (ok_tx, ok_rx) = crossbeam_channel::bounded::<Result<(), String>>(1);
         let (kill_tx, kill_rx) = crossbeam_channel::bounded::<()>(1);
         let ok_tx2 = ok_tx.clone();
+        let err_tx = self.device_err_tx.clone();
         std::thread::spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                audio_owner(&core, &want, &ok_tx2, &kill_rx)
+                audio_owner(&core, &want, &ok_tx2, &kill_rx, &err_tx)
             }));
             if let Err(p) = result {
                 let msg = p
@@ -1033,6 +1052,45 @@ fn status_json(s: &Status) -> serde_json::Value {
         "pos": s.pos,
         "dur": s.dur,
     })
+}
+
+/// Espera avisos de fallo del stream de audio (dispositivo desconectado en
+/// caliente) y reintenta reabrirlo con backoff creciente; si el usuario ya
+/// no tiene nada cargado no hace nada (no hay para qué reconectar).
+fn device_supervisor(app: tauri::AppHandle, err_rx: Receiver<()>) {
+    for _ in err_rx.iter() {
+        // varias callbacks de cpal pueden avisar del mismo fallo casi a la
+        // vez: se descartan las repetidas antes de intentar reconectar
+        while err_rx.try_recv().is_ok() {}
+        let p = app.state::<Player>();
+        if p.core.lock().unwrap().cur.is_none() {
+            continue;
+        }
+        log_warn("audio: el dispositivo de salida falló en caliente, intentando reconectar…");
+        p.streams.lock().unwrap().take();
+        let mut ok = false;
+        for attempt in 0..6u32 {
+            std::thread::sleep(Duration::from_millis(500 * (attempt as u64 + 1)));
+            if p.ensure_streams().is_ok() {
+                ok = true;
+                break;
+            }
+        }
+        let msg = if ok {
+            "dispositivo de audio reconectado".to_string()
+        } else {
+            "no se pudo reconectar el dispositivo de audio tras varios intentos".to_string()
+        };
+        if ok {
+            log_msg(&msg);
+        } else {
+            log_error(&msg);
+        }
+        let lock_result = p.core.lock();
+        if let Ok(mut c) = lock_result {
+            c.runtime_error = Some(msg);
+        }
+    }
 }
 
 fn reporter_loop(app: tauri::AppHandle, core: Arc<Mutex<Core>>, rx: Receiver<()>) {
@@ -1261,9 +1319,10 @@ mod tests {
 
         let (ok_tx, ok_rx) = crossbeam_channel::bounded::<Result<(), String>>(1);
         let (kill_tx, kill_rx) = crossbeam_channel::bounded::<()>(1);
+        let (err_tx, _err_rx) = crossbeam_channel::unbounded::<()>();
         let c2 = core.clone();
         std::thread::spawn(move || {
-            audio_owner(&c2, &None, &ok_tx, &kill_rx);
+            audio_owner(&c2, &None, &ok_tx, &kill_rx, &err_tx);
         });
 
         match ok_rx.recv_timeout(Duration::from_secs(8)) {

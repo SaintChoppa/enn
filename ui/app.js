@@ -2201,6 +2201,7 @@ async function init() {
         el.miniTitle.textContent = "—";
         return;
       }
+      if (s.audio_error) toast(s.audio_error);
       const nowPlaying = s.state === "playing";
       if (nowPlaying !== wasPlaying) {
         if (wasPlaying && s.state === "idle" && !suppressNext) onEnded();
