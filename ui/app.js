@@ -597,9 +597,11 @@ if (radioBtn) {
 function paintModes() {
   el.shuffle.classList.toggle("active", shuffleOn);
   el.shuffle.title = `Aleatorio: ${shuffleOn ? "on" : "off"}`;
+  el.shuffle.setAttribute("aria-pressed", String(shuffleOn));
   iconSetMode("btn-shuffle", "shuffle", shuffleOn ? "on" : "off");
   el.repeat.classList.toggle("active", repeatMode !== 0);
   el.repeat.title = `Repetición: ${["off", "todo", "una"][repeatMode]}`;
+  el.repeat.setAttribute("aria-pressed", String(repeatMode !== 0));
   iconSetMode("btn-repeat", "repeat", ["off", "all", "1"][repeatMode]);
 }
 
@@ -1064,6 +1066,16 @@ async function addFolder() {
 
 $("btn-folder").addEventListener("click", addFolder);
 $("btn-files").addEventListener("click", openFiles);
+$("btn-batch-tags").addEventListener("click", () => {
+  // el filtro de búsqueda es la "selección múltiple": exigir uno activo
+  // evita editar por accidente toda la biblioteca con un clic
+  if (!el.search.value.trim()) {
+    return toast("Escribe algo en el buscador para elegir qué canciones editar");
+  }
+  const tracks = filtered.map((i) => library[i]);
+  if (!tracks.length) return toast("La búsqueda actual no tiene resultados");
+  showBatchTagEditor(tracks);
+});
 $("btn-rescan").addEventListener("click", async () => {
   try {
     const r = await invoke("lib_refresh");
@@ -1474,6 +1486,7 @@ el.seek.addEventListener("change", () => {
 // ---------------------------------------------------------------- estado del motor
 function updatePlayBtn() {
   el.play.innerHTML = playing ? SVG.pause : SVG.play;
+  el.play.setAttribute("aria-label", playing ? "Pausar" : "Reproducir");
 }
 
 let lastTitle = "";
@@ -2109,6 +2122,79 @@ function showTagEditor(t) {
       propsEl.classList.add("hidden");
       body.style.display = "";
       toast("Etiquetas guardadas");
+      await reloadLibrary();
+    } catch (e) {
+      toast(`No se pudo guardar: ${e}`);
+    }
+  });
+  row.append(cancel, save);
+  body.appendChild(row);
+  propsEl.classList.remove("hidden");
+}
+
+// Editor de etiquetas por lote: aplica artista/álbum a todas las `tracks`
+// que coincidían con el filtro de búsqueda activo. Cada campo tiene su
+// propio checkbox: sin marcar, ese campo no se toca en ninguna pista;
+// marcado, se escribe el valor (vacío incluido) en todas.
+function showBatchTagEditor(tracks) {
+  const body = $("props-body");
+  $("props-title").textContent = `Editar etiquetas de ${tracks.length} canciones`;
+  body.innerHTML = "";
+  body.style.display = "block";
+  const mkField = (label) => {
+    const wrap = document.createElement("label");
+    wrap.style.cssText = "display:block;margin:8px 0;font-size:12px;color:var(--text-dim,#888)";
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;align-items:center;gap:6px";
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    const span = document.createElement("span");
+    span.textContent = `Cambiar ${label} a:`;
+    head.append(chk, span);
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.disabled = true;
+    inp.style.cssText = "width:100%;margin-top:3px;padding:6px 8px;border:none;border-radius:6px;background:var(--track,rgba(128,128,128,0.15));color:inherit;font:inherit";
+    chk.addEventListener("change", () => { inp.disabled = !chk.checked; });
+    wrap.append(head, inp);
+    body.appendChild(wrap);
+    return { chk, inp };
+  };
+  const fArtist = mkField("artista");
+  const fAlbum = mkField("álbum");
+  const hint = document.createElement("div");
+  hint.style.cssText = "font-size:12px;color:var(--text-dim,#888);margin-top:4px";
+  hint.textContent = "Deja un campo sin marcar para no tocarlo. Dejarlo marcado pero vacío borra esa etiqueta en las canciones seleccionadas.";
+  body.appendChild(hint);
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:8px;margin-top:12px;justify-content:flex-end";
+  const cancel = document.createElement("button");
+  cancel.className = "btn small";
+  cancel.textContent = "Cancelar";
+  cancel.addEventListener("click", () => {
+    body.style.display = "";
+    propsEl.classList.add("hidden");
+  });
+  const save = document.createElement("button");
+  save.className = "btn small primary";
+  save.textContent = `Guardar en ${tracks.length}`;
+  save.addEventListener("click", async () => {
+    if (!fArtist.chk.checked && !fAlbum.chk.checked) {
+      return toast("Marca al menos un campo para cambiar");
+    }
+    try {
+      const res = await invoke("tags_write_batch", {
+        paths: tracks.map((t) => t.path),
+        artist: fArtist.chk.checked ? fArtist.inp.value : null,
+        album: fAlbum.chk.checked ? fAlbum.inp.value : null,
+      });
+      propsEl.classList.add("hidden");
+      body.style.display = "";
+      toast(
+        res.failed
+          ? `Actualizadas ${res.updated}, ${res.failed} fallaron (${res.first_error || ""})`
+          : `Etiquetas actualizadas en ${res.updated} canciones`
+      );
       await reloadLibrary();
     } catch (e) {
       toast(`No se pudo guardar: ${e}`);

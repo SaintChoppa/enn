@@ -429,19 +429,20 @@ fn waveform(app: tauri::AppHandle, path: String) -> Option<Vec<u8>> {
     waves::get_or_spawn(&app, Path::new(&path))
 }
 
-/// Escribe etiquetas en el archivo (B6) y actualiza la biblioteca.
-#[tauri::command]
-fn tags_write(
-    app: tauri::AppHandle,
-    path: String,
-    title: String,
-    artist: String,
-    album: String,
+/// Escribe en `path` los campos presentes (`Some`); un campo en `None` no se
+/// toca en absoluto (el batch lo usa para "no tocar artista/álbum en estas
+/// pistas"), mientras que `Some("")` sí borra la clave — mismo comportamiento
+/// que ya tenía el editor de una sola pista.
+fn write_tags_partial(
+    path: &str,
+    title: Option<&str>,
+    artist: Option<&str>,
+    album: Option<&str>,
 ) -> Result<(), String> {
     use lofty::file::TaggedFileExt;
     use lofty::prelude::*;
 
-    let p = Path::new(&path);
+    let p = Path::new(path);
     if !p.is_file() {
         return Err("el archivo no existe".into());
     }
@@ -456,10 +457,11 @@ fn tags_write(
             .ok_or("no se pudo crear una etiqueta para este archivo")?,
     };
     for (k, v) in [
-        (ItemKey::TrackTitle, title.as_str()),
-        (ItemKey::TrackArtist, artist.as_str()),
-        (ItemKey::AlbumTitle, album.as_str()),
+        (ItemKey::TrackTitle, title),
+        (ItemKey::TrackArtist, artist),
+        (ItemKey::AlbumTitle, album),
     ] {
+        let Some(v) = v else { continue };
         if v.trim().is_empty() {
             tag.remove_key(&k);
         } else {
@@ -468,23 +470,79 @@ fn tags_write(
     }
     tagged
         .save_to_path(p, lofty::config::WriteOptions::default())
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+}
 
-    // refresca la entrada de la biblioteca con los metadatos reales
-    {
-        let st = app.state::<EnnState>();
-        let mut lib = st.lib.lock().unwrap();
-        if let Some(t) = lib.tracks.iter_mut().find(|t| t.path == path) {
-            if let Some(fresh) = library::probe(p) {
-                t.title = fresh.title;
-                t.artist = fresh.artist;
-                t.album = fresh.album;
-                t.dur = fresh.dur.or(t.dur);
+/// Refresca en la biblioteca en memoria los metadatos reales de `path` tras
+/// escribirlos en el archivo (título/duración pueden no haber cambiado, pero
+/// releerlos evita que la lista muestre algo distinto de lo que hay en disco).
+fn refresh_lib_entry(app: &tauri::AppHandle, path: &str) {
+    let st = app.state::<EnnState>();
+    let mut lib = st.lib.lock().unwrap();
+    if let Some(t) = lib.tracks.iter_mut().find(|t| t.path == path) {
+        if let Some(fresh) = library::probe(Path::new(path)) {
+            t.title = fresh.title;
+            t.artist = fresh.artist;
+            t.album = fresh.album;
+            t.dur = fresh.dur.or(t.dur);
+        }
+    }
+    lib.save(&st.lib_path);
+}
+
+/// Escribe etiquetas en el archivo (B6) y actualiza la biblioteca.
+#[tauri::command]
+fn tags_write(
+    app: tauri::AppHandle,
+    path: String,
+    title: String,
+    artist: String,
+    album: String,
+) -> Result<(), String> {
+    write_tags_partial(&path, Some(&title), Some(&artist), Some(&album))?;
+    refresh_lib_entry(&app, &path);
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+struct BatchTagResult {
+    updated: usize,
+    failed: usize,
+    first_error: Option<String>,
+}
+
+/// Editor de etiquetas por lote: aplica `artist`/`album` (cuando vienen,
+/// `None` = no tocar ese campo) a varias pistas de una vez. El título se deja
+/// fuera a propósito — cambiarlo igual en varias pistas casi nunca es lo que
+/// se quiere — y el género no se ofrece porque `Track` todavía no lo
+/// almacena (ver ROADMAP-ENN.md sección 4).
+#[tauri::command]
+fn tags_write_batch(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+    artist: Option<String>,
+    album: Option<String>,
+) -> BatchTagResult {
+    let mut res = BatchTagResult {
+        updated: 0,
+        failed: 0,
+        first_error: None,
+    };
+    for path in &paths {
+        match write_tags_partial(path, None, artist.as_deref(), album.as_deref()) {
+            Ok(()) => {
+                refresh_lib_entry(&app, path);
+                res.updated += 1;
+            }
+            Err(e) => {
+                res.failed += 1;
+                if res.first_error.is_none() {
+                    res.first_error = Some(format!("{path}: {e}"));
+                }
             }
         }
-        lib.save(&st.lib_path);
     }
-    Ok(())
+    res
 }
 
 #[tauri::command]
@@ -897,6 +955,7 @@ pub fn run() {
             get_spectrum,
             waveform,
             tags_write,
+            tags_write_batch,
             get_state
         ])
         .run(tauri::generate_context!())

@@ -10,11 +10,12 @@
   <div id="app" style="--qw: 330px">
     <main id="library-pane">
       <div id="lib-head">
-        <input id="search" type="search" placeholder="Buscar en tu música…" autocomplete="off" spellcheck="false" title="Filtros: artista:, album:, formato:, favorito:" />
+        <input id="search" type="search" placeholder="Buscar en tu música…" autocomplete="off" spellcheck="false" title="Filtros: artista:, album:, formato:, favorito:" aria-label="Buscar en tu música" />
         <button id="btn-download" class="btn small" title="Descargar música (YouTube)">⬇ Descargar</button>
         <button id="btn-folder" class="btn small" title="Añadir carpeta a la biblioteca">📁 Carpeta</button>
         <button id="btn-files" class="btn small" title="Añadir archivos de audio">🎵 Archivos</button>
         <button id="btn-rescan" class="btn small" title="Re-escaneo de las carpetas">↻</button>
+        <button id="btn-batch-tags" class="btn small" title="Editar artista/álbum de todas las canciones que coinciden con la búsqueda actual">✎ Lote</button>
         <button id="btn-save-m3u" class="btn small" title="Guardar la cola como .m3u">💾</button>
         <button id="btn-open-m3u" class="btn small" title="Abrir playlist .m3u">📂</button>
       </div>
@@ -130,11 +131,11 @@
     </section>
 
     <footer id="controls">
-      <button id="btn-shuffle" class="ctl mode" title="Aleatorio: off">🔀<i>off</i></button>
-      <button id="btn-repeat" class="ctl mode" title="Repetición: off">🔁<i>off</i></button>
-      <button id="btn-prev" class="ctl" title="Anterior">⏮</button>
-      <button id="btn-play" class="ctl big" title="Reproducir/Pausar (espacio)">▶</button>
-      <button id="btn-next" class="ctl" title="Siguiente">⏭</button>
+      <button id="btn-shuffle" class="ctl mode" title="Aleatorio: off" aria-label="Aleatorio" aria-pressed="false">🔀<i>off</i></button>
+      <button id="btn-repeat" class="ctl mode" title="Repetición: off" aria-label="Repetición" aria-pressed="false">🔁<i>off</i></button>
+      <button id="btn-prev" class="ctl" title="Anterior" aria-label="Pista anterior">⏮</button>
+      <button id="btn-play" class="ctl big" title="Reproducir/Pausar (espacio)" aria-label="Reproducir o pausar">▶</button>
+      <button id="btn-next" class="ctl" title="Siguiente" aria-label="Siguiente pista">⏭</button>
       <div class="ctl-meta" id="ctl-meta">
         <img id="mini-art" class="mini-art hidden" alt="" />
         <span id="mini-title">—</span>
@@ -143,18 +144,18 @@
       <div class="seekwrap">
         <span id="t-cur" class="tm">0:00</span>
         <canvas id="seek-wave" height="10"></canvas>
-        <input type="range" id="seek" min="0" max="1000" value="0" step="1" />
+        <input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="Posición de reproducción" />
         <span id="t-dur" class="tm">0:00</span>
       </div>
-      <button id="btn-mixer" class="ctl small" title="Mezclador (EQ, tono, balance, fade)">🎛️</button>
-      <button id="btn-mini" class="ctl small" title="Modo mini (doble clic aquí para volver)">🗕</button>
+      <button id="btn-mixer" class="ctl small" title="Mezclador (EQ, tono, balance, fade)" aria-label="Abrir mezclador">🎛️</button>
+      <button id="btn-mini" class="ctl small" title="Modo mini (doble clic aquí para volver)" aria-label="Modo mini">🗕</button>
       <label class="dev" title="Dispositivo de salida">
-        <select id="device">
+        <select id="device" aria-label="Dispositivo de salida de audio">
           <option value="">Predeterminado</option>
         </select>
       </label>
       <label class="vol" title="Volumen">
-        <input type="range" id="volume" min="0" max="150" value="80" />
+        <input type="range" id="volume" min="0" max="150" value="80" aria-label="Volumen" />
         <span id="vol-num">80</span>
       </label>
     </footer>
@@ -165,7 +166,7 @@
       <div class="props-card">
         <div class="props-head">
           <span id="props-title">Propiedades</span>
-          <button id="props-close" class="icon-btn" title="Cerrar">✕</button>
+          <button id="props-close" class="icon-btn" title="Cerrar" aria-label="Cerrar">✕</button>
         </div>
         <dl id="props-body"></dl>
       </div>
