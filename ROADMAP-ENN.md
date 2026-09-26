@@ -79,9 +79,9 @@ updated: 2026-09-25
 - [ ] 🔴 `M` **Smart playlists** basadas en reglas (ej: "rating > 4 AND género = Rock AND agregado en los últimos 30 días") — hoy solo hay M3U estático y playlists manuales.
 - [x] 🟡 `S` Sistema de **favoritos** por pista — ✅ hecho (★, filtro `favorito:`, campo `favorite: bool` con serde default). Rating numérico 1-5 queda pendiente si lo prefieres sobre el booleano.
 - [x] 🟡 `M` Editor de etiquetas por lote — ✅ hecho: botón "✎ Lote" edita artista/álbum/**género** de todo lo que coincide con el filtro de búsqueda activo (esa es la "selección"). `Track` ya almacena género y año (ver sección 3).
-- [ ] 🟢 `S` Auto-completado de artista/álbum al escribir en el editor de etiquetas (usando lo ya indexado en biblioteca).
+- [x] 🟢 `S` Auto-completado de artista/álbum al escribir en el editor de etiquetas — ✅ hecho vía `<datalist>`, en el editor individual y el de lote.
 - [ ] 🟡 `M` Detección de biblioteca duplicada (mismo archivo en dos carpetas indexadas, o mismo track en distinta calidad) con opción de "quedarme con la mejor versión".
-- [ ] 🟢 `S` Ordenar biblioteca por "más escuchado recientemente" además de "más reproducido total" (ya existe historial, falta esta vista derivada).
+- [x] 🟢 `S` Ordenar biblioteca por "más escuchado recientemente" además de "más reproducido total" — ✅ hecho: "Escuchadas recientemente" junto a "Más reproducidas" en Actividad; de paso, el historial completo (hasta 500) pasó a colapsado por defecto en vez de volcarse entero siempre.
 
 ## 5. 🔎 Metadatos enriquecidos (nivel Spotify/Plex)
 

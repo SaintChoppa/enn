@@ -156,23 +156,48 @@ function recordHistory(track) {
   try { localStorage.setItem("enn.history", JSON.stringify(history)); } catch {}
 }
 
+// El historial completo (hasta 500 entradas) va colapsado por defecto,
+// como grupo aparte de "Escuchadas recientemente" (que ya vive en
+// smartLists() y solo muestra un top 25) — evita renderizar 500 filas al
+// abrir la pestaña Actividad cuando nadie las pidió todavía.
 function renderHistory() {
   const frag = document.createDocumentFragment();
-  const ul = document.createElement("ul");
-  ul.className = "track-list";
-  if (!history.length) {
-    const li = document.createElement("li");
-    li.className = "list-hint";
-    li.style.display = "block";
-    li.textContent = "Todavía no has escuchado nada en Enn.";
-    ul.appendChild(li);
+  const head = document.createElement("div");
+  head.className = "group-head" + (historyOpen ? " open" : "");
+  const arrow = document.createElement("span");
+  arrow.className = "arrow";
+  arrow.textContent = "▶";
+  const name = document.createElement("span");
+  name.className = "g-name";
+  name.textContent = "Historial completo";
+  const count = document.createElement("span");
+  count.className = "g-count";
+  count.textContent = `${history.length}`;
+  head.append(arrow, name, count);
+  head.addEventListener("click", () => {
+    historyOpen = !historyOpen;
+    renderLib();
+  });
+  frag.appendChild(head);
+  if (historyOpen) {
+    const body = document.createElement("div");
+    body.className = "group-body open";
+    const ul = document.createElement("ul");
+    if (!history.length) {
+      const li = document.createElement("li");
+      li.className = "list-hint";
+      li.style.display = "block";
+      li.textContent = "Todavía no has escuchado nada en Enn.";
+      ul.appendChild(li);
+    }
+    for (const h of history) {
+      const li = rowEl({ path: h.path, title: h.title, artist: h.artist, dur: null });
+      li.addEventListener("click", () => playPathNow(h.path));
+      ul.appendChild(li);
+    }
+    body.appendChild(ul);
+    frag.appendChild(body);
   }
-  for (const h of history) {
-    const li = rowEl({ path: h.path, title: h.title, artist: h.artist, dur: null });
-    li.addEventListener("click", () => playPathNow(h.path));
-    ul.appendChild(li);
-  }
-  frag.appendChild(ul);
   el.libList.appendChild(frag);
 }
 
@@ -186,7 +211,19 @@ function smartLists() {
     .filter((x) => x.t)
     .sort((a, b) => b.n - a.n)
     .slice(0, 25);
-  return [{ name: "Más reproducidas", tracks: mostPlayed.map((x) => x.t) }];
+  // `history` ya viene deduplicada por ruta y ordenada del más reciente al
+  // más antiguo (recordHistory hace unshift tras filtrar la entrada previa),
+  // así que "recientemente escuchadas" es directamente sus primeros N
+  // resueltos contra la biblioteca actual (título/álbum/arte al día, no la
+  // foto vieja que se guardó en el momento de reproducir)
+  const recent = history
+    .map((h) => byPath.get(h.path))
+    .filter(Boolean)
+    .slice(0, 25);
+  return [
+    { name: "Escuchadas recientemente", tracks: recent },
+    { name: "Más reproducidas", tracks: mostPlayed.map((x) => x.t) },
+  ];
 }
 
 function renderSmart() {
@@ -617,6 +654,7 @@ let openYearGroups = new Set();
 let expandedPl = null;
 let openAlbum = null; // clave "artista\u0000álbum" expandida en la rejilla
 let openSmart = new Set(); // listas inteligentes expandidas
+let historyOpen = false; // historial completo (hasta 500), colapsado por defecto
 
 // ---- carátulas: caché en memoria + carga diferida por visibilidad
 const artCache = new Map(); // ruta de pista -> data URI
@@ -1060,6 +1098,30 @@ $("btn-pl-add").addEventListener("click", async () => {
     toast(String(e));
   }
 });
+// Autocompletado del editor de etiquetas: nombres ya presentes en la
+// biblioteca, para no volver a escribir "Bad Bunny" letra por letra ni
+// terminar con "Bad bunny"/"bad Bunny" como artistas distintos por un typo.
+function refreshTagDatalists() {
+  const artists = new Set();
+  const albums = new Set();
+  for (const t of library) {
+    if (t.artist) artists.add(t.artist);
+    if (t.album) albums.add(t.album);
+  }
+  const fill = (id, values) => {
+    const dl = document.getElementById(id);
+    if (!dl) return;
+    dl.innerHTML = "";
+    for (const v of Array.from(values).sort((a, b) => a.localeCompare(b, "es"))) {
+      const opt = document.createElement("option");
+      opt.value = v;
+      dl.appendChild(opt);
+    }
+  };
+  fill("artists-datalist", artists);
+  fill("albums-datalist", albums);
+}
+
 async function reloadLibrary() {
   try {
     library = await invoke("lib_list");
@@ -1069,6 +1131,7 @@ async function reloadLibrary() {
   filtered = library.map((_, i) => i);
   libWinEnd = 500;
   renderLib();
+  refreshTagDatalists();
 }
 
 // ---------------------------------------------------------------- añadir archivos/carpetas
@@ -2340,21 +2403,22 @@ function showTagEditor(t) {
   $("props-title").textContent = "Editar etiquetas";
   body.innerHTML = "";
   body.style.display = "block";
-  const mk = (label, value) => {
+  const mk = (label, value, listId) => {
     const l = document.createElement("label");
     l.style.cssText = "display:block;margin:8px 0;font-size:12px;color:var(--text-dim,#888)";
     l.textContent = label;
     const inp = document.createElement("input");
     inp.type = "text";
     inp.value = value || "";
+    if (listId) inp.setAttribute("list", listId);
     inp.style.cssText = "width:100%;margin-top:3px;padding:6px 8px;border:none;border-radius:6px;background:var(--track,rgba(128,128,128,0.15));color:inherit;font:inherit";
     l.appendChild(inp);
     body.appendChild(l);
     return inp;
   };
   const fTitle = mk("Título", t.title);
-  const fArtist = mk("Artista", t.artist);
-  const fAlbum = mk("Álbum", t.album);
+  const fArtist = mk("Artista", t.artist, "artists-datalist");
+  const fAlbum = mk("Álbum", t.album, "albums-datalist");
   const fGenre = mk("Género", t.genre);
   const row = document.createElement("div");
   row.style.cssText = "display:flex;gap:8px;margin-top:12px;justify-content:flex-end";
@@ -2399,7 +2463,7 @@ function showBatchTagEditor(tracks) {
   $("props-title").textContent = `Editar etiquetas de ${tracks.length} canciones`;
   body.innerHTML = "";
   body.style.display = "block";
-  const mkField = (label) => {
+  const mkField = (label, listId) => {
     const wrap = document.createElement("label");
     wrap.style.cssText = "display:block;margin:8px 0;font-size:12px;color:var(--text-dim,#888)";
     const head = document.createElement("div");
@@ -2412,14 +2476,15 @@ function showBatchTagEditor(tracks) {
     const inp = document.createElement("input");
     inp.type = "text";
     inp.disabled = true;
+    if (listId) inp.setAttribute("list", listId);
     inp.style.cssText = "width:100%;margin-top:3px;padding:6px 8px;border:none;border-radius:6px;background:var(--track,rgba(128,128,128,0.15));color:inherit;font:inherit";
     chk.addEventListener("change", () => { inp.disabled = !chk.checked; });
     wrap.append(head, inp);
     body.appendChild(wrap);
     return { chk, inp };
   };
-  const fArtist = mkField("artista");
-  const fAlbum = mkField("álbum");
+  const fArtist = mkField("artista", "artists-datalist");
+  const fAlbum = mkField("álbum", "albums-datalist");
   const fGenre = mkField("género");
   const hint = document.createElement("div");
   hint.style.cssText = "font-size:12px;color:var(--text-dim,#888);margin-top:4px";
