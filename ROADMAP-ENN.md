@@ -69,6 +69,8 @@ updated: 2026-09-25
 - [x] 🔴 `M` Exponer en la UI la **tasa de bits/profundidad real** — ✅ hecho: badge junto al título con formato/Hz/bits o kbps.
 - [x] ~~🟡 `M` Verificar bypass del resampler~~ — ✅ **ya estaba bien**: `dsp.rs:362-367` copia directa sin filtrar cuando `ratio≈1`.
 - [ ] 🟢 `S` Dither opcional al reducir bit-depth (para salidas de 16-bit desde fuentes de mayor profundidad).
+- [x] 🟡 `S` Extraer **género y año** de las etiquetas (`Tags`/`Track`) — ✅ hecho, vía `StandardTagKey` de Symphonia en vez de adivinar nombres de clave crudos por formato.
+- [ ] 🟡 `S` **Bug encontrado, no arreglado**: el lector WAV de Symphonia no expone ninguna etiqueta (título/artista/álbum/género/año quedan vacíos siempre en archivos `.wav`) — confirmado escribiendo con lofty y comprobando que Symphonia no ve nada. Arreglarlo implica leer etiquetas de WAV vía lofty en vez de Symphonia; WAV es poco común en la biblioteca real, así que se dejó documentado (`decode.rs`, función `read_tags`) en vez de arriesgar una refactorización más grande.
 
 ## 4. 📚 Biblioteca, indexación y organización
 
@@ -76,7 +78,7 @@ updated: 2026-09-25
 - [ ] 🟡 `M` Vistas adicionales: por **año**, **género**, **carpeta física**, y "compilaciones" (detectar Various Artists correctamente en vez de romper la agrupación por álbum).
 - [ ] 🔴 `M` **Smart playlists** basadas en reglas (ej: "rating > 4 AND género = Rock AND agregado en los últimos 30 días") — hoy solo hay M3U estático y playlists manuales.
 - [x] 🟡 `S` Sistema de **favoritos** por pista — ✅ hecho (★, filtro `favorito:`, campo `favorite: bool` con serde default). Rating numérico 1-5 queda pendiente si lo prefieres sobre el booleano.
-- [x] 🟡 `M` Editor de etiquetas por lote — ✅ hecho: botón "✎ Lote" edita artista/álbum de todo lo que coincide con el filtro de búsqueda activo (esa es la "selección"). Género queda pendiente porque `Track` todavía no lo almacena.
+- [x] 🟡 `M` Editor de etiquetas por lote — ✅ hecho: botón "✎ Lote" edita artista/álbum/**género** de todo lo que coincide con el filtro de búsqueda activo (esa es la "selección"). `Track` ya almacena género y año (ver sección 3).
 - [ ] 🟢 `S` Auto-completado de artista/álbum al escribir en el editor de etiquetas (usando lo ya indexado en biblioteca).
 - [ ] 🟡 `M` Detección de biblioteca duplicada (mismo archivo en dos carpetas indexadas, o mismo track en distinta calidad) con opción de "quedarme con la mejor versión".
 - [ ] 🟢 `S` Ordenar biblioteca por "más escuchado recientemente" además de "más reproducido total" (ya existe historial, falta esta vista derivada).
