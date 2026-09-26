@@ -698,11 +698,15 @@ async function loadArtInto(img) {
 
 function makeLibRow(track, i, opts = {}) {
   const li = rowEl(track, opts);
-  if (i === null || i === undefined) {
-    li.addEventListener("click", () => playPathNow(track.path));
-  } else {
-    li.addEventListener("click", () => playFromLibrary(i));
-  }
+  const play = () => {
+    // el clic también mueve el cursor de navegación por teclado, si no
+    // las flechas seguirían desde donde se habían dejado antes del clic
+    kbdFocusPath = track.path;
+    applyKbdFocus();
+    if (i === null || i === undefined) playPathNow(track.path);
+    else playFromLibrary(i);
+  };
+  li.addEventListener("click", play);
   const fav = document.createElement("button");
   fav.className = "x fav" + (track.favorite ? " on" : "");
   fav.textContent = track.favorite ? "★" : "☆";
@@ -826,7 +830,52 @@ function renderFlat() {
     frag.appendChild(makeLibRow(library[filtered[i]], i));
   }
   el.libList.appendChild(frag);
+  applyKbdFocus();
 }
+
+// ---------------------------------------------------------------- navegación por teclado (E7)
+// Solo en la vista "Todas" (plana): las vistas agrupadas/álbumes tienen su
+// propia estructura de acordeón y no son una lista simple de filas.
+let kbdFocusPath = null;
+
+function libRows() {
+  // ":scope > li" y no un selector genérico: en otras vistas el mismo
+  // #lib-list contiene <div> de grupo, no solo <li> de pista
+  return Array.from(el.libList.querySelectorAll(":scope > li"));
+}
+
+function applyKbdFocus() {
+  if (view !== "all" || !kbdFocusPath) return;
+  for (const li of libRows()) {
+    li.classList.toggle("kbd-focus", li.dataset.path === kbdFocusPath);
+  }
+}
+
+el.libList.addEventListener("keydown", (e) => {
+  if (view !== "all") return;
+  const rows = libRows();
+  if (!rows.length) return;
+  const curIdxInRows = rows.findIndex((li) => li.dataset.path === kbdFocusPath);
+
+  if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
+    e.preventDefault();
+    let next;
+    if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = rows.length - 1;
+    else if (e.key === "ArrowDown") next = Math.min(curIdxInRows + 1, rows.length - 1);
+    else next = Math.max(curIdxInRows - 1, 0);
+    kbdFocusPath = rows[next].dataset.path;
+    applyKbdFocus();
+    rows[next].scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter") {
+    if (curIdxInRows < 0) return;
+    e.preventDefault();
+    // la fila con foco de teclado puede no ser la #0 de `filtered` si hay
+    // scroll infinito de por medio — se resuelve por ruta, no por posición
+    const flatIdx = filtered.findIndex((i) => library[i].path === kbdFocusPath);
+    if (flatIdx >= 0) playFromLibrary(flatIdx);
+  }
+});
 
 // ---- agrupador genérico: grupos expandibles con acordeón, usado por
 // "Por artista"/"Por género"/"Por año" — misma UI, distinta clave de

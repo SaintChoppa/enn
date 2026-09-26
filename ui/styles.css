@@ -423,6 +423,13 @@ body.is-playing .track-list li.current .art.on {
   opacity: 0.8;
 }
 
+/* fila con foco de teclado (flechas en #lib-list) — distinto de .current
+   (esa marca la que suena; esta, la que tiene el cursor de navegación) */
+.track-list li.kbd-focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 #queue-panel {
   grid-area: queue;
   border-left: 1px solid var(--border);

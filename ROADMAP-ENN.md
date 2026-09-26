@@ -101,7 +101,7 @@ updated: 2026-09-25
 
 ## 7. ⌨️ Accesibilidad y atajos
 
-- [ ] 🟡 `M` Navegación completa por teclado en la lista de biblioteca (flechas, Enter para reproducir, Space para pausar) — confirmar cobertura actual en `app.js`.
+- [x] 🟡 `M` Navegación por teclado en la lista de biblioteca — ✅ hecho para la vista "Todas" (flechas/Home/End mueven un cursor visible, Enter reproduce; Space para pausar ya funcionaba globalmente, sin conflicto). **Confirmado: no había ninguna cobertura antes de esto.** Las vistas agrupadas (por artista/género/año/álbumes) quedan pendientes — tienen su propia estructura de acordeón, no una lista plana.
 - [x] 🟡 `S` Atributos ARIA en los controles principales — ✅ hecho: `aria-label` en todos los controles icon-only, `aria-pressed` sincronizado en shuffle/repeat, label dinámico en play/pause.
 - [ ] 🟢 `S` Tamaño de fuente / densidad de lista ajustable (accesibilidad visual).
 - [ ] 🟢 `S` Soporte de lector de pantalla básico para los controles de transporte.
