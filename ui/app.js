@@ -964,6 +964,7 @@ el.libList.addEventListener("scroll", () => {
 
 // ---- pestañas de vista
 function setView(v) {
+  const changed = v !== view;
   view = v;
   for (const id of ["tab-all", "tab-artist", "tab-albums", "tab-playlist", "tab-activity"]) {
     document.getElementById(id).classList.toggle("active", id === `tab-${v}`);
@@ -972,7 +973,20 @@ function setView(v) {
   if (bar) bar.classList.toggle("hidden", v !== "playlist");
   if (v === "playlist") expandedPl = null;
   if (v !== "albums") openAlbum = null;
-  renderLib();
+  // pequeño crossfade al cambiar de pestaña: sin esto el contenido de la
+  // lista se reemplazaba de golpe, se sentía más "página recargada" que app
+  if (changed && el.libList) {
+    el.libList.style.opacity = "0";
+    requestAnimationFrame(() => {
+      try {
+        renderLib();
+      } finally {
+        requestAnimationFrame(() => { el.libList.style.opacity = "1"; });
+      }
+    });
+  } else {
+    renderLib();
+  }
 }
 document.getElementById("tab-all").addEventListener("click", () => setView("all"));
 document.getElementById("tab-artist").addEventListener("click", () => setView("artist"));
@@ -2304,6 +2318,7 @@ function showTagEditor(t) {
   const fTitle = mk("Título", t.title);
   const fArtist = mk("Artista", t.artist);
   const fAlbum = mk("Álbum", t.album);
+  const fGenre = mk("Género", t.genre);
   const row = document.createElement("div");
   row.style.cssText = "display:flex;gap:8px;margin-top:12px;justify-content:flex-end";
   const cancel = document.createElement("button");
@@ -2323,6 +2338,7 @@ function showTagEditor(t) {
         title: fTitle.value,
         artist: fArtist.value,
         album: fAlbum.value,
+        genre: fGenre.value,
       });
       propsEl.classList.add("hidden");
       body.style.display = "";
@@ -2337,8 +2353,8 @@ function showTagEditor(t) {
   propsEl.classList.remove("hidden");
 }
 
-// Editor de etiquetas por lote: aplica artista/álbum a todas las `tracks`
-// que coincidían con el filtro de búsqueda activo. Cada campo tiene su
+// Editor de etiquetas por lote: aplica artista/álbum/género a todas las
+// `tracks` que coincidían con el filtro de búsqueda activo. Cada campo tiene su
 // propio checkbox: sin marcar, ese campo no se toca en ninguna pista;
 // marcado, se escribe el valor (vacío incluido) en todas.
 function showBatchTagEditor(tracks) {
@@ -2367,6 +2383,7 @@ function showBatchTagEditor(tracks) {
   };
   const fArtist = mkField("artista");
   const fAlbum = mkField("álbum");
+  const fGenre = mkField("género");
   const hint = document.createElement("div");
   hint.style.cssText = "font-size:12px;color:var(--text-dim,#888);margin-top:4px";
   hint.textContent = "Deja un campo sin marcar para no tocarlo. Dejarlo marcado pero vacío borra esa etiqueta en las canciones seleccionadas.";
@@ -2384,7 +2401,7 @@ function showBatchTagEditor(tracks) {
   save.className = "btn small primary";
   save.textContent = `Guardar en ${tracks.length}`;
   save.addEventListener("click", async () => {
-    if (!fArtist.chk.checked && !fAlbum.chk.checked) {
+    if (!fArtist.chk.checked && !fAlbum.chk.checked && !fGenre.chk.checked) {
       return toast("Marca al menos un campo para cambiar");
     }
     try {
@@ -2392,6 +2409,7 @@ function showBatchTagEditor(tracks) {
         paths: tracks.map((t) => t.path),
         artist: fArtist.chk.checked ? fArtist.inp.value : null,
         album: fAlbum.chk.checked ? fAlbum.inp.value : null,
+        genre: fGenre.chk.checked ? fGenre.inp.value : null,
       });
       propsEl.classList.add("hidden");
       body.style.display = "";

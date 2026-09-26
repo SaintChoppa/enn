@@ -19,6 +19,11 @@ pub struct Track {
     /// marcada como favorita por el usuario (no viene del archivo)
     #[serde(default)]
     pub favorite: bool,
+    #[serde(default)]
+    pub genre: String,
+    /// año de lanzamiento/grabación (None si el archivo no lo declara)
+    #[serde(default)]
+    pub year: Option<u32>,
 }
 
 fn tag_or(t: &Option<String>, fallback: &str) -> String {
@@ -43,6 +48,8 @@ pub fn probe(path: &Path) -> Option<Track> {
         title,
         artist,
         album,
+        genre,
+        year,
     } = opened.tags;
     let _ = dec;
     Some(Track {
@@ -53,6 +60,8 @@ pub fn probe(path: &Path) -> Option<Track> {
         dur,
         rg: None,
         favorite: false,
+        genre: tag_or(&genre, ""),
+        year,
     })
 }
 

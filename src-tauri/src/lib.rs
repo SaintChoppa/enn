@@ -438,6 +438,7 @@ fn write_tags_partial(
     title: Option<&str>,
     artist: Option<&str>,
     album: Option<&str>,
+    genre: Option<&str>,
 ) -> Result<(), String> {
     use lofty::file::TaggedFileExt;
     use lofty::prelude::*;
@@ -460,6 +461,7 @@ fn write_tags_partial(
         (ItemKey::TrackTitle, title),
         (ItemKey::TrackArtist, artist),
         (ItemKey::AlbumTitle, album),
+        (ItemKey::Genre, genre),
     ] {
         let Some(v) = v else { continue };
         if v.trim().is_empty() {
@@ -485,6 +487,8 @@ fn refresh_lib_entry(app: &tauri::AppHandle, path: &str) {
             t.artist = fresh.artist;
             t.album = fresh.album;
             t.dur = fresh.dur.or(t.dur);
+            t.genre = fresh.genre;
+            t.year = fresh.year;
         }
     }
     lib.save(&st.lib_path);
@@ -498,8 +502,15 @@ fn tags_write(
     title: String,
     artist: String,
     album: String,
+    genre: Option<String>,
 ) -> Result<(), String> {
-    write_tags_partial(&path, Some(&title), Some(&artist), Some(&album))?;
+    write_tags_partial(
+        &path,
+        Some(&title),
+        Some(&artist),
+        Some(&album),
+        Some(genre.as_deref().unwrap_or("")),
+    )?;
     refresh_lib_entry(&app, &path);
     Ok(())
 }
@@ -511,17 +522,17 @@ struct BatchTagResult {
     first_error: Option<String>,
 }
 
-/// Editor de etiquetas por lote: aplica `artist`/`album` (cuando vienen,
-/// `None` = no tocar ese campo) a varias pistas de una vez. El título se deja
-/// fuera a propósito — cambiarlo igual en varias pistas casi nunca es lo que
-/// se quiere — y el género no se ofrece porque `Track` todavía no lo
-/// almacena (ver ROADMAP-ENN.md sección 4).
+/// Editor de etiquetas por lote: aplica `artist`/`album`/`genre` (cuando
+/// vienen, `None` = no tocar ese campo) a varias pistas de una vez. El
+/// título se deja fuera a propósito — cambiarlo igual en varias pistas casi
+/// nunca es lo que se quiere.
 #[tauri::command]
 fn tags_write_batch(
     app: tauri::AppHandle,
     paths: Vec<String>,
     artist: Option<String>,
     album: Option<String>,
+    genre: Option<String>,
 ) -> BatchTagResult {
     let mut res = BatchTagResult {
         updated: 0,
@@ -529,7 +540,13 @@ fn tags_write_batch(
         first_error: None,
     };
     for path in &paths {
-        match write_tags_partial(path, None, artist.as_deref(), album.as_deref()) {
+        match write_tags_partial(
+            path,
+            None,
+            artist.as_deref(),
+            album.as_deref(),
+            genre.as_deref(),
+        ) {
             Ok(()) => {
                 refresh_lib_entry(&app, path);
                 res.updated += 1;

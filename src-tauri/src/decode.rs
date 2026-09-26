@@ -21,6 +21,10 @@ pub struct Tags {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    pub genre: Option<String>,
+    /// año de 4 dígitos, tomado de cualquier variante de fecha que traiga el
+    /// archivo (grabación, lanzamiento u original) — la primera que aparezca.
+    pub year: Option<u32>,
 }
 
 pub struct Opened {
@@ -278,32 +282,61 @@ impl Decoder {
     }
 }
 
+/// NOTA: para WAV, el lector RIFF de Symphonia (`symphonia-format-riff`) no
+/// expone ninguna etiqueta desde aquí — probado escribiendo un chunk LIST/
+/// INFO con lofty y comprobando que `Metadata::current()` llega vacío. Los
+/// demás formatos soportados (MP3/FLAC/M4A/OGG) sí funcionan. No es una
+/// regresión de este cambio: título/artista/álbum en WAV ya venían vacíos
+/// antes; simplemente nunca se había puesto a prueba. Arreglarlo requeriría
+/// leer las etiquetas de WAV con lofty en vez de Symphonia — más trabajo del
+/// que entra aquí, y WAV es un formato de nicho en la biblioteca real.
 fn read_tags(mut md: Metadata<'_>) -> Tags {
+    use symphonia::core::meta::StandardTagKey as Std;
+
     let mut tags = Tags::default();
-    let mut by_key: Vec<(String, String)> = Vec::new();
+    // (std_key si el lector de este formato lo reconoció, la clave cruda en
+    // minúsculas, el valor) — preferimos std_key porque `key` es específico
+    // de cada formato (ID3v2 vs Vorbis comments vs átomos MP4); std_key es
+    // la normalización que Symphonia ya hace por nosotros y es lo que la
+    // documentación del propio crate recomienda usar en vez de adivinar
+    // nombres de clave por formato.
+    let mut entries: Vec<(Option<Std>, String, String)> = Vec::new();
     loop {
         if let Some(rev) = md.current() {
             for t in rev.tags() {
                 let k = t.key.to_ascii_lowercase();
                 let v = t.value.to_string();
-                by_key.push((k, v));
+                entries.push((t.std_key, k, v));
             }
         }
         if md.pop().is_none() {
             break;
         }
     }
-    let get = |keys: &[&str]| -> Option<String> {
-        for (k, v) in &by_key {
-            if keys.contains(&k.as_str()) && !v.trim().is_empty() {
-                return Some(v.trim().to_string());
-            }
-        }
-        None
+    let get_std = |want: Std| -> Option<String> {
+        entries
+            .iter()
+            .find(|(sk, _, v)| *sk == Some(want) && !v.trim().is_empty())
+            .map(|(_, _, v)| v.trim().to_string())
     };
-    tags.title = get(&["title", "song"]);
-    tags.artist = get(&["artist"]);
-    tags.album = get(&["album"]);
+    let get_key = |keys: &[&str]| -> Option<String> {
+        entries
+            .iter()
+            .find(|(_, k, v)| keys.contains(&k.as_str()) && !v.trim().is_empty())
+            .map(|(_, _, v)| v.trim().to_string())
+    };
+    tags.title = get_std(Std::TrackTitle).or_else(|| get_key(&["title", "song"]));
+    tags.artist = get_std(Std::Artist).or_else(|| get_key(&["artist"]));
+    tags.album = get_std(Std::Album).or_else(|| get_key(&["album"]));
+    tags.genre = get_std(Std::Genre).or_else(|| get_key(&["genre"]));
+    let date_str = get_std(Std::Date)
+        .or_else(|| get_std(Std::OriginalDate))
+        .or_else(|| get_std(Std::ReleaseDate))
+        .or_else(|| get_key(&["date", "year"]));
+    // una fecha puede venir como "2019" o "2019-05-01": los primeros 4
+    // caracteres bastan para el año si son dígitos; si no (formatos raros
+    // tipo "5/1/2019") se descarta en vez de extraer un año inventado
+    tags.year = date_str.and_then(|s| s.get(0..4)?.parse::<u32>().ok());
     tags
 }
 
@@ -347,5 +380,81 @@ pub fn scan_music_dir(dir: &Path, out: &mut Vec<PathBuf>) {
         } else if is_supported_path(&p) {
             out.push(p);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use symphonia::core::meta::{MetadataBuilder, MetadataLog, StandardTagKey, Tag, Value};
+
+    /// `read_tags` debe preferir `std_key` (la clasificación que Symphonia ya
+    /// hace por nosotros) sobre adivinar por el nombre crudo de la clave, que
+    /// varía por formato (ID3v2 "TCON" vs Vorbis "GENRE" vs MP4 "©gen"...).
+    /// Se construye la metadata en memoria en vez de pasar por un archivo
+    /// real: escribir con lofty y releer con Symphonia habría probado el
+    /// soporte de metadatos de un contenedor concreto, no la función que de
+    /// verdad cambié — y de hecho así fue como se descubrió, al intentarlo
+    /// primero con un WAV, que el lector WAV de Symphonia no expone ninguna
+    /// etiqueta en absoluto (ver nota en `read_tags`), algo aparte de este
+    /// cambio.
+    #[test]
+    fn read_tags_prefers_std_key_over_raw_key_name() {
+        let mut mb = MetadataBuilder::new();
+        mb.add_tag(Tag::new(
+            Some(StandardTagKey::TrackTitle),
+            "unknown_raw_key",
+            Value::String("Test Title".to_string()),
+        ));
+        mb.add_tag(Tag::new(
+            Some(StandardTagKey::Genre),
+            "unknown_raw_key",
+            Value::String("Synthwave".to_string()),
+        ));
+        mb.add_tag(Tag::new(
+            Some(StandardTagKey::OriginalDate),
+            "unknown_raw_key",
+            Value::String("2019-05-01".to_string()),
+        ));
+        let mut log = MetadataLog::default();
+        log.push(mb.metadata());
+
+        let tags = read_tags(log.metadata());
+        assert_eq!(tags.title.as_deref(), Some("Test Title"));
+        assert_eq!(tags.genre.as_deref(), Some("Synthwave"));
+        assert_eq!(tags.year, Some(2019));
+    }
+
+    /// Sin `std_key` (lector que no lo reconoció), el respaldo por nombre
+    /// crudo de clave sigue funcionando — no debe quedar como regresión al
+    /// preferir std_key en el camino feliz.
+    #[test]
+    fn read_tags_falls_back_to_raw_key_without_std_key() {
+        let mut mb = MetadataBuilder::new();
+        mb.add_tag(Tag::new(None, "GENRE", Value::String("Lo-fi".to_string())));
+        mb.add_tag(Tag::new(None, "YEAR", Value::String("2021".to_string())));
+        let mut log = MetadataLog::default();
+        log.push(mb.metadata());
+
+        let tags = read_tags(log.metadata());
+        assert_eq!(tags.genre.as_deref(), Some("Lo-fi"));
+        assert_eq!(tags.year, Some(2021));
+    }
+
+    /// Una fecha con formato inusual (no "AAAA..." al inicio) se descarta en
+    /// vez de convertirse en un año inventado.
+    #[test]
+    fn read_tags_rejects_malformed_year() {
+        let mut mb = MetadataBuilder::new();
+        mb.add_tag(Tag::new(
+            Some(StandardTagKey::Date),
+            "unknown_raw_key",
+            Value::String("5/1/2019".to_string()),
+        ));
+        let mut log = MetadataLog::default();
+        log.push(mb.metadata());
+
+        let tags = read_tags(log.metadata());
+        assert_eq!(tags.year, None);
     }
 }
