@@ -11,18 +11,21 @@
   <div id="app" style="--qw: 330px">
     <main id="library-pane">
       <div id="lib-head">
-        <input id="search" type="search" placeholder="Buscar en tu música…" autocomplete="off" spellcheck="false" title="Filtros: artista:, album:, formato:, favorito:" aria-label="Buscar en tu música" />
+        <input id="search" type="search" placeholder="Buscar en tu música…" autocomplete="off" spellcheck="false" title="Filtros: artista:, album:, género:, año:, formato:, favorito:" aria-label="Buscar en tu música" />
         <button id="btn-download" class="btn small" title="Descargar música (YouTube)">⬇ Descargar</button>
         <button id="btn-folder" class="btn small" title="Añadir carpeta a la biblioteca">📁 Carpeta</button>
         <button id="btn-files" class="btn small" title="Añadir archivos de audio">🎵 Archivos</button>
         <button id="btn-rescan" class="btn small" title="Re-escaneo de las carpetas">↻</button>
         <button id="btn-batch-tags" class="btn small" title="Editar artista/álbum de todas las canciones que coinciden con la búsqueda actual">✎ Lote</button>
+        <button id="btn-duplicates" class="btn small" title="Buscar pistas repetidas (mismo título y artista) en toda la biblioteca">🔍 Duplicados</button>
         <button id="btn-save-m3u" class="btn small" title="Guardar la cola como .m3u">💾</button>
         <button id="btn-open-m3u" class="btn small" title="Abrir playlist .m3u">📂</button>
       </div>
       <div id="view-tabs">
         <button id="tab-all" class="tab active">Todas</button>
         <button id="tab-artist" class="tab">Por artista</button>
+        <button id="tab-genre" class="tab">Por género</button>
+        <button id="tab-year" class="tab">Por año</button>
         <button id="tab-albums" class="tab">Álbumes</button>
         <button id="tab-playlist" class="tab">Playlist</button>
         <button id="tab-activity" class="tab">Actividad</button>

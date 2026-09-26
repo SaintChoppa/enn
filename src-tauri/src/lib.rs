@@ -237,6 +237,18 @@ fn lib_set_favorite(app: tauri::AppHandle, path: String, favorite: bool) -> Resu
     }
 }
 
+/// Quita una pista del índice de la biblioteca (no borra el archivo).
+#[tauri::command]
+fn lib_remove_track(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let st = app.state::<EnnState>();
+    let mut lib = st.lib.lock().unwrap();
+    if lib.remove_track(&path, &st.lib_path) {
+        Ok(())
+    } else {
+        Err("la pista no está en la biblioteca".into())
+    }
+}
+
 // ---------------------------------------------------------------- playlists
 
 #[tauri::command]
@@ -949,6 +961,7 @@ pub fn run() {
             lib_list,
             lib_folders,
             lib_set_favorite,
+            lib_remove_track,
             probe_paths,
             playlist_save,
             playlist_load,

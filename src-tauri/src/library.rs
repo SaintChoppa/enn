@@ -181,6 +181,20 @@ impl Library {
         self.tracks.clear();
         self.save(path);
     }
+
+    /// Quita una pista del índice (no borra el archivo del disco). Usado por
+    /// el detector de duplicados: "quedarme con esta versión" retira las
+    /// demás de la biblioteca sin tocar nada en el sistema de archivos, así
+    /// que es reversible con un simple re-escaneo de la carpeta.
+    pub fn remove_track(&mut self, track_path: &str, path: &Path) -> bool {
+        let before = self.tracks.len();
+        self.tracks.retain(|t| t.path != track_path);
+        let removed = self.tracks.len() != before;
+        if removed {
+            self.save(path);
+        }
+        removed
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -354,6 +368,37 @@ mod tests {
         let t = &lib.tracks[0];
         assert_eq!(t.rg, Some(-14.2), "rg debería sobrevivir al refresh");
         assert!(t.favorite, "favorite debería sobrevivir al refresh");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn remove_track_drops_from_index_not_disk() {
+        let dir = std::env::temp_dir().join(format!("enn_test_remove_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("track.wav");
+        write_tiny_wav(&wav);
+        let lib_json = dir.join("library.json");
+
+        let mut lib = Library::default();
+        lib.scan_into(&dir.to_string_lossy(), &lib_json);
+        assert_eq!(lib.tracks.len(), 1);
+        let path = lib.tracks[0].path.clone();
+
+        let removed = lib.remove_track(&path, &lib_json);
+        assert!(removed, "debería reportar que sí quitó la pista");
+        assert!(lib.tracks.is_empty(), "el índice debe quedar vacío");
+        assert!(wav.is_file(), "el archivo en disco no debe tocarse");
+
+        // el índice guardado en disco también debe reflejar la quita
+        let reloaded = Library::load(&lib_json);
+        assert!(reloaded.tracks.is_empty());
+
+        let removed_again = lib.remove_track(&path, &lib_json);
+        assert!(
+            !removed_again,
+            "quitar una ruta que ya no está no es un error, pero tampoco hace nada"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

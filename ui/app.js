@@ -610,8 +610,10 @@ function libCountText() {
   return `${library.length} canciones`;
 }
 
-let view = "all"; // all | artist | albums | playlist | activity
+let view = "all"; // all | artist | genre | year | albums | playlist | activity
 let openGroups = new Set();
+let openGenreGroups = new Set();
+let openYearGroups = new Set();
 let expandedPl = null;
 let openAlbum = null; // clave "artista\u0000álbum" expandida en la rejilla
 let openSmart = new Set(); // listas inteligentes expandidas
@@ -706,6 +708,10 @@ function renderLib() {
   el.libList.innerHTML = "";
   if (view === "artist") {
     renderByArtist();
+  } else if (view === "genre") {
+    renderByGenre();
+  } else if (view === "year") {
+    renderByYear();
   } else if (view === "albums") {
     renderAlbums();
   } else if (view === "playlist") {
@@ -784,21 +790,33 @@ function renderFlat() {
   el.libList.appendChild(frag);
 }
 
-// ---- vista "Por artista": grupos expandibles con acordeón
-function renderByArtist() {
+// ---- agrupador genérico: grupos expandibles con acordeón, usado por
+// "Por artista"/"Por género"/"Por año" — misma UI, distinta clave de
+// agrupación y su propio Set de grupos abiertos (independiente por vista,
+// para que no se hereden expansiones entre pestañas por coincidencia de texto)
+function renderGrouped(keyFn, openSet, sortNumeric) {
   const groups = new Map();
   for (const i of filtered) {
     const t = library[i];
-    const key = (t.artist || "").trim() || "Sin artista";
+    const key = keyFn(t);
     if (!groups.has(key)) groups.set(key, new Map());
     groups.get(key).set(i, t);
   }
-  const keys = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, "es"));
+  const keys = Array.from(groups.keys()).sort((a, b) => {
+    if (!sortNumeric) return a.localeCompare(b, "es");
+    // orden numérico descendente (más reciente primero); "Sin año" no es un
+    // número — se manda siempre al final en vez de intercalarse al azar
+    const na = Number(a), nb = Number(b);
+    if (Number.isNaN(na) && Number.isNaN(nb)) return a.localeCompare(b, "es");
+    if (Number.isNaN(na)) return 1;
+    if (Number.isNaN(nb)) return -1;
+    return nb - na;
+  });
   const frag = document.createDocumentFragment();
   for (const key of keys) {
     const songs = groups.get(key);
     const head = document.createElement("div");
-    head.className = "group-head" + (openGroups.has(key) ? " open" : "");
+    head.className = "group-head" + (openSet.has(key) ? " open" : "");
     const arrow = document.createElement("span");
     arrow.className = "arrow";
     arrow.textContent = "▶";
@@ -810,15 +828,15 @@ function renderByArtist() {
     count.textContent = `${songs.size}`;
     head.append(arrow, name, count);
     head.addEventListener("click", () => {
-      const nowOpen = openGroups.has(key);
-      if (nowOpen) openGroups.delete(key);
-      else openGroups.add(key);
+      const nowOpen = openSet.has(key);
+      if (nowOpen) openSet.delete(key);
+      else openSet.add(key);
       head.classList.toggle("open", !nowOpen);
       const body = head.nextSibling;
       if (body && body.classList) body.classList.toggle("open", !nowOpen);
     });
     const body = document.createElement("div");
-    body.className = "group-body" + (openGroups.has(key) ? " open" : "");
+    body.className = "group-body" + (openSet.has(key) ? " open" : "");
     const ul = document.createElement("ul");
     for (const [i, t] of songs) {
       ul.appendChild(makeLibRow(t, i));
@@ -828,6 +846,18 @@ function renderByArtist() {
     frag.appendChild(body);
   }
   el.libList.appendChild(frag);
+}
+
+function renderByArtist() {
+  renderGrouped((t) => (t.artist || "").trim() || "Sin artista", openGroups);
+}
+
+function renderByGenre() {
+  renderGrouped((t) => (t.genre || "").trim() || "Sin género", openGenreGroups);
+}
+
+function renderByYear() {
+  renderGrouped((t) => (t.year ? String(t.year) : "Sin año"), openYearGroups, true);
 }
 
 // ---- vista "Playlist"
@@ -908,10 +938,12 @@ el.search.addEventListener("input", () => {
   const filters = [];
   const free = [];
   for (const tok of q.split(/\s+/).filter(Boolean)) {
-    const m = tok.match(/^(artista|álbum|album|formato|ext|favorito|favorita|fav):(.*)$/i);
+    const m = tok.match(/^(artista|álbum|album|género|genero|año|ano|formato|ext|favorito|favorita|fav):(.*)$/i);
     if (m) {
       let key = m[1].toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
       if (key === "favorita" || key === "fav") key = "favorito";
+      if (key === "genero") key = "género";
+      if (key === "ano") key = "año";
       filters.push([key, m[2].toLowerCase()]);
     } else {
       free.push(tok);
@@ -921,7 +953,7 @@ el.search.addEventListener("input", () => {
   filtered = library
     .map((t, i) => ({ t, i }))
     .filter(({ t }) => {
-      if (freeQ && !`${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(freeQ)) {
+      if (freeQ && !`${t.title} ${t.artist} ${t.album} ${t.genre || ""}`.toLowerCase().includes(freeQ)) {
         return false;
       }
       for (const [key, val] of filters) {
@@ -933,6 +965,8 @@ el.search.addEventListener("input", () => {
         if (!val) continue;
         if (key === "artista" && !(t.artist || "").toLowerCase().includes(val)) return false;
         if (key === "album" && !(t.album || "").toLowerCase().includes(val)) return false;
+        if (key === "género" && !(t.genre || "").toLowerCase().includes(val)) return false;
+        if (key === "año" && String(t.year || "") !== val) return false;
         if (key === "formato" || key === "ext") {
           const ext = (t.path.split(".").pop() || "").toLowerCase();
           if (ext !== val) return false;
@@ -966,7 +1000,7 @@ el.libList.addEventListener("scroll", () => {
 function setView(v) {
   const changed = v !== view;
   view = v;
-  for (const id of ["tab-all", "tab-artist", "tab-albums", "tab-playlist", "tab-activity"]) {
+  for (const id of ["tab-all", "tab-artist", "tab-genre", "tab-year", "tab-albums", "tab-playlist", "tab-activity"]) {
     document.getElementById(id).classList.toggle("active", id === `tab-${v}`);
   }
   const bar = document.getElementById("pl-bar");
@@ -990,6 +1024,8 @@ function setView(v) {
 }
 document.getElementById("tab-all").addEventListener("click", () => setView("all"));
 document.getElementById("tab-artist").addEventListener("click", () => setView("artist"));
+document.getElementById("tab-genre").addEventListener("click", () => setView("genre"));
+document.getElementById("tab-year").addEventListener("click", () => setView("year"));
 document.getElementById("tab-albums").addEventListener("click", () => setView("albums"));
 document.getElementById("tab-playlist").addEventListener("click", () => setView("playlist"));
 document.getElementById("tab-activity").addEventListener("click", () => setView("activity"));
@@ -2239,6 +2275,8 @@ function showProps(t) {
     ["Título", t.title],
     ["Artista", t.artist || "—"],
     ["Álbum", t.album || "—"],
+    ["Género", t.genre || "—"],
+    ["Año", t.year || "—"],
     ["Duración", t.dur ? fmtTime(t.dur) : "—"],
     ["Formato", ext || "—"],
     ["Sonoridad", typeof t.rg === "number" ? `${t.rg.toFixed(1)} LUFS` : "sin analizar"],
@@ -2427,6 +2465,94 @@ function showBatchTagEditor(tracks) {
   body.appendChild(row);
   propsEl.classList.remove("hidden");
 }
+
+// Detección de duplicados en biblioteca: agrupa por título+artista
+// normalizados (mismo normTitleKey que ya usa el aviso de descarga) — no
+// hace falta comparar contenido de archivo, dos pistas con el mismo título
+// y artista casi siempre son la misma canción en dos copias/calidades.
+function findLibraryDuplicates() {
+  const groups = new Map();
+  for (const t of library) {
+    const key = `${normTitleKey(t.artist)}|${normTitleKey(t.title)}`;
+    if (key === "|") continue; // sin título ni artista: no hay nada que comparar
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  }
+  const dupGroups = [];
+  for (const tracks of groups.values()) {
+    if (tracks.length > 1) dupGroups.push(tracks);
+  }
+  dupGroups.sort((a, b) => b.length - a.length);
+  return dupGroups;
+}
+
+function showDuplicatesPanel() {
+  const groups = findLibraryDuplicates();
+  const body = $("props-body");
+  $("props-title").textContent = groups.length
+    ? `Posibles duplicados (${groups.length} grupos)`
+    : "Sin duplicados";
+  body.innerHTML = "";
+  body.style.display = "block";
+  if (!groups.length) {
+    const p = document.createElement("div");
+    p.style.cssText = "font-size:13px;color:var(--text-dim,#888)";
+    p.textContent = "No se encontraron pistas con el mismo título y artista.";
+    body.appendChild(p);
+  }
+  for (const group of groups) {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border,rgba(128,128,128,.2))";
+    const title = document.createElement("div");
+    title.style.cssText = "font-weight:600;margin-bottom:6px;font-size:13px";
+    title.textContent = `${group[0].artist || "Sin artista"} — ${group[0].title}`;
+    wrap.appendChild(title);
+    for (const t of group) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;font-size:12px;margin:4px 0";
+      const ext = (t.path.split(".").pop() || "").toUpperCase();
+      const info = document.createElement("span");
+      info.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-dim,#888)";
+      info.title = t.path;
+      info.textContent = `${ext} · ${fmtTime(t.dur || 0)} · ${t.path}`;
+      const keep = document.createElement("button");
+      keep.className = "btn small";
+      keep.textContent = "Quedarme con esta";
+      keep.addEventListener("click", async () => {
+        const others = group.filter((x) => x.path !== t.path);
+        keep.disabled = true;
+        let ok = 0;
+        for (const o of others) {
+          try {
+            await invoke("lib_remove_track", { path: o.path });
+            ok++;
+          } catch {}
+        }
+        toast(`Quitadas ${ok} de la biblioteca (los archivos no se tocan en disco)`);
+        await reloadLibrary();
+        showDuplicatesPanel(); // refresca la lista con este grupo ya resuelto
+      });
+      row.append(info, keep);
+      wrap.appendChild(row);
+    }
+    body.appendChild(wrap);
+  }
+  const closeRow = document.createElement("div");
+  closeRow.style.cssText = "display:flex;justify-content:flex-end;margin-top:8px";
+  const close = document.createElement("button");
+  close.className = "btn small";
+  close.textContent = "Cerrar";
+  close.addEventListener("click", () => {
+    body.style.display = "";
+    propsEl.classList.add("hidden");
+  });
+  closeRow.appendChild(close);
+  body.appendChild(closeRow);
+  propsEl.classList.remove("hidden");
+}
+
+const btnDuplicates = $("btn-duplicates");
+if (btnDuplicates) btnDuplicates.addEventListener("click", showDuplicatesPanel);
 
 el.queue.addEventListener("contextmenu", (e) => {
   const li = e.target.closest("li");
