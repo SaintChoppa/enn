@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "build": "tauri build"
+    "build": "tauri build",
+    "lint": "eslint ui/app.js"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "^2",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0"
   }
 }

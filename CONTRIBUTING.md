@@ -26,6 +26,7 @@ cargo fmt
 cargo clippy --all-targets -- -D warnings
 cargo test
 node --check ../ui/app.js
+cd .. && npm run lint
 ```
 
 CI runs the same checks on `[windows, ubuntu, macos]`; a PR that doesn't pass

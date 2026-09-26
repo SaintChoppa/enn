@@ -862,9 +862,8 @@ function renderByYear() {
 
 // ---- vista "Playlist"
 async function renderPlaylists() {
-  let plDir = "";
   try {
-    plDir = await invoke("playlist_dir");
+    const plDir = await invoke("playlist_dir");
     const info = document.getElementById("pl-info");
     if (info) info.textContent = plDir ? `Guardadas en: ${plDir}` : "";
     document.getElementById("pl-bar").classList.remove("hidden");

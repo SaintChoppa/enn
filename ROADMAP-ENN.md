@@ -126,7 +126,7 @@ updated: 2026-09-25
 - [x] 🔴 `M` Matriz de CI cross-platform (ver punto 2) — ✅ ya hecho en la sesión anterior (`[windows, ubuntu, macos]`), sin verificar aún en un run real de GH Actions.
 - [ ] 🟡 `S` Tests de integración para el flujo completo de descarga (mock del proceso yt-dlp, no solo `classify_line` como hoy en `downloader.rs`).
 - [x] 🟢 `S` Test de regresión para el resampler — ✅ hecho: bypass exacto fijado + test de FFT (1 kHz, 44.1→48 kHz) que verifica frecuencia y THD acotado.
-- [ ] 🟢 `S` Linting de UI (`app.js`) más allá de `node --check` — considerar ESLint básico.
+- [x] 🟢 `S` Linting de UI (`app.js`) más allá de `node --check` — ✅ hecho: ESLint (`npm run lint`), en CI y en el checklist de `CONTRIBUTING.md`. Encontró y arregló una asignación inútil real (`plDir` en `renderPlaylists`).
 
 ## 11. 📦 Empaquetado y distribución
 
