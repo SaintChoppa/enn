@@ -457,12 +457,18 @@ async function playPathNow(path) {
     playAt(known);
     return;
   }
-  const probed = await invoke("probe_paths", { paths: [path] });
-  if (probed.tracks && probed.tracks.length) {
-    session.push(probed.tracks[0]);
-    saveQueue();
-    renderQueue();
-    await playAt(session.length - 1);
+  try {
+    const probed = await invoke("probe_paths", { paths: [path] });
+    if (probed.tracks && probed.tracks.length) {
+      session.push(probed.tracks[0]);
+      saveQueue();
+      renderQueue();
+      await playAt(session.length - 1);
+    } else {
+      throw new Error(probed.first_error || "Desconocido");
+    }
+  } catch (e) {
+    toast(`Error al leer pista: ${e.message || e}`);
   }
 }
 
@@ -489,10 +495,16 @@ async function enqueuePath(path) {
     toast("Ya está en la cola");
     return;
   }
-  const probed = await invoke("probe_paths", { paths: [path] });
-  if (probed.tracks && probed.tracks.length) {
-    pushTracks(probed.tracks, { quiet: true });
-    toast("Agregada a la cola");
+  try {
+    const probed = await invoke("probe_paths", { paths: [path] });
+    if (probed.tracks && probed.tracks.length) {
+      pushTracks(probed.tracks, { quiet: true });
+      toast("Agregada a la cola");
+    } else {
+      throw new Error(probed.first_error || "Desconocido");
+    }
+  } catch (e) {
+    toast(`Error al encolar pista: ${e.message || e}`);
   }
 }
 
