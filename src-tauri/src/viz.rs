@@ -165,7 +165,8 @@ impl VizAnalyzer {
         let mut pw = [0.0f64; 3];
         let mut cnt = [0usize; 3];
         let (mut cw, mut cs) = (0.0f64, 0.0f64);
-        for i in lo.max(1)..top {
+        let start = lo.max(1);
+        for (i, m) in self.mag.iter().enumerate().take(top).skip(start) {
             let f = i as f64 * bin_hz;
             let b = if f < BAND_EDGES[1] {
                 0
@@ -174,7 +175,7 @@ impl VizAnalyzer {
             } else {
                 2
             };
-            let p = self.mag[i] * self.mag[i];
+            let p = m * m;
             pw[b] += p;
             cnt[b] += 1;
             if f > 40.0 {
