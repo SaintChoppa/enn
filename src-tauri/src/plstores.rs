@@ -153,11 +153,18 @@ pub fn add(lib_dir: &str, name: &str, track: &Track) -> Result<usize, String> {
 pub fn remove(lib_dir: &str, name: &str, track_path: &str) -> Result<usize, String> {
     let path = resolve(lib_dir, name)?;
     let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    // la cabecera se escribe una vez aquí y se salta la original en el bucle
+    // (auditoría 2026-11-12, bug #4: antes salían dos `#EXTM3U`)
     let mut out = String::from("#EXTM3U\n");
     let mut removed = 0usize;
     let mut pending_extinf: Option<String> = None;
     for line in existing.lines() {
         let t = line.trim();
+        if t.trim_start_matches('\u{feff}')
+            .eq_ignore_ascii_case("#EXTM3U")
+        {
+            continue;
+        }
         if t.starts_with("#EXTINF") {
             pending_extinf = Some(line.to_string());
             continue;
@@ -190,4 +197,25 @@ fn raw_paths(content: &str) -> Vec<&str> {
         .map(|l| l.trim())
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Auditoría 2026-11-12, bug #4: quitar una pista dejaba dos `#EXTM3U`.
+    #[test]
+    fn remove_keeps_a_single_header() {
+        let lib = std::env::temp_dir().join(format!("enn-pl-test-{}", std::process::id()));
+        let lib_s = lib.to_string_lossy().to_string();
+        let meta = create(&lib_s, "prueba").unwrap();
+        let body =
+            "#EXTM3U\n#EXTINF:10,A - Uno\nC:/m/uno.flac\n#EXTINF:20,B - Dos\nC:/m/dos.flac\n";
+        std::fs::write(&meta.path, body).unwrap();
+        assert_eq!(remove(&lib_s, "prueba", "C:/m/uno.flac").unwrap(), 1);
+        let out = std::fs::read_to_string(&meta.path).unwrap();
+        let _ = std::fs::remove_dir_all(&lib);
+        assert_eq!(out.matches("#EXTM3U").count(), 1, "{out}");
+        assert_eq!(out, "#EXTM3U\n#EXTINF:20,B - Dos\nC:/m/dos.flac\n");
+    }
 }

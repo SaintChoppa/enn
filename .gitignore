@@ -6,8 +6,10 @@ src-tauri/target/
 target/
 
 # ── Artefactos de distribución ────────────────────────────────
+# Los .exe (yt-dlp/ffmpeg) se descargan en build.rs, así que no se versionan.
+# Aquí vivía un `!src-tauri/target/**/*.exe` que no hacía nada: git no puede
+# re-incluir archivos dentro de un directorio ya ignorado.
 *.exe
-!src-tauri/target/**/*.exe
 *.msi
 *.dmg
 
@@ -24,6 +26,23 @@ target/
 
 # ── Data de usuario generada en ejecución ─────────────────────
 
+# CSS de Tailwind generado por `npm run build:css` (fuente: ui/tw-input.css)
+ui/tw-output.css
+
 # -- Generados por tauri-Build ------
 src-tauri/gen/
 
+# Config local de cargo: apunta el caché de compilación fuera de OneDrive
+# (D:\enn-target), igual que hace dev.ps1. Es específica de esta máquina.
+src-tauri/.cargo/
+
+
+# ── Herramientas locales (asistentes de IA, habilidades instaladas) ──
+.claude/
+.agents/
+skills-lock.json
+
+# ── Obsidian: disposición de ventanas de cada equipo y notas vacías ──
+.obsidian/workspace*.json
+Sin título*.canvas
+Sin título*.base

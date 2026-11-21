@@ -1,0 +1,49 @@
+/* Entrada de Tailwind (rediseño "Obsidian Hi-Fi"). Los tokens de abajo son
+   alias semánticos sobre las variables CSS reales de styles.css (--bg,
+   --panel, --accent, ...), vía "@theme inline" — Tailwind genera
+   utilidades (bg-surface, text-ink, border-hairline...) que en runtime
+   siguen resolviendo a esas variables, así que el color reactivo por
+   pista se mantiene como una sola fuente de verdad. No hardcodear colores
+   Tailwind (bg-zinc-950) en marcado nuevo: usar estos tokens o, si falta
+   uno, añadirlo aquí primero.
+
+   Reparto del híbrido: Tailwind para lo nuevo (cabecera, Studio,
+   medidores); styles.css para la rejilla, el estado (data-mode/data-view)
+   y lo que ya existía. styles.css no está en capa, así que si ambos tocan
+   la misma propiedad, gana styles.css.
+
+   Sin preflight a propósito: su reset (bordes, fondos de botón, listas)
+   rompería los componentes viejos, que ya tienen su propio reset. Solo
+   se importan el tema y las utilidades.
+
+   Compilar:  npm run build:css (una vez) · npm run watch:css (mientras editas)
+   ui/tw-output.css NO se versiona (.gitignore): `tauri dev`/`tauri build` lo
+   regeneran solos vía beforeDevCommand/beforeBuildCommand de tauri.conf.json. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+/* solo el marcado de la UI: sin esto escanearía también el Rust */
+@source "./index.html";
+@source "./app.js";
+
+@theme inline {
+  --color-surface: var(--bg);
+  --color-surface-soft: var(--bg-soft);
+  --color-panel: var(--panel);
+  --color-panel-solid: var(--panel-solid);
+  --color-ink: var(--text);
+  --color-ink-dim: var(--text-dim);
+  --color-ink-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-soft: var(--accent-soft);
+  --color-hairline: var(--border);
+  --color-hairline-hi: var(--border-hi);
+  --color-track: var(--track);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-ivory: var(--ivory);
+  --color-ivory-ink: var(--ivory-ink);
+  --color-chip: var(--obsidian-chip);
+}

@@ -87,14 +87,6 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<std::sync::Mutex<Core>>, rx: Recei
                 )
             };
             let (track, state, pos) = snapshot;
-            // carátula solo cuando cambia la pista (lectura de cabeceras + caché)
-            let cover_url = track.as_ref().and_then(|(_, _, _, _, p)| {
-                let dir = {
-                    let st = app.state::<crate::EnnState>();
-                    st.art_dir.clone()
-                };
-                crate::art::cached_cover_url(&dir, p)
-            });
             let track_key = track.as_ref().map(|(ti, ar, al, d, p)| {
                 (
                     ti.clone(),
@@ -107,6 +99,16 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<std::sync::Mutex<Core>>, rx: Recei
             if track_key != last_track {
                 last_track = track_key.clone();
                 last_state = None; // fuerza refresco del estado también
+                                   // la carátula se resuelve SOLO al cambiar de pista: antes se
+                                   // calculaba en cada vuelta del bucle (4 veces por segundo), con
+                                   // su `fs::metadata` y sus `is_file()` incluidos, mientras suena algo
+                let cover_url = track.as_ref().and_then(|(_, _, _, _, p)| {
+                    let dir = {
+                        let st = app.state::<crate::EnnState>();
+                        st.art_dir.clone()
+                    };
+                    crate::art::cached_cover_url(&dir, p)
+                });
                 let meta = match &track {
                     Some((ti, ar, al, d, _)) => MediaMetadata {
                         title: Some(ti),

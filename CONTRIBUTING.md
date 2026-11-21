@@ -45,7 +45,7 @@ locally on your platform won't pass there either.
 ## Scope
 
 Enn deliberately does **not** aim to be a Spotify/streaming client — see
-`ROADMAP-ENN.md` section 0 for why, and what a legal, metadata-based
+`Desarollo Enn/04 Planes/Roadmap.md` section 0 for why, and what a legal, metadata-based
 integration would look like instead. Feature requests along those lines are
 welcome as long as they respect that constraint.
 

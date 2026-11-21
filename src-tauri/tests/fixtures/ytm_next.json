@@ -1,0 +1,2022 @@
+{
+ "contents": {
+  "singleColumnMusicWatchNextResultsRenderer": {
+   "tabbedRenderer": {
+    "watchNextTabbedResultsRenderer": {
+     "tabs": [
+      {
+       "tabRenderer": {
+        "content": {
+         "musicQueueRenderer": {
+          "content": {
+           "playlistPanelRenderer": {
+            "contents": [
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "4D7u5KF7SP8",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Get Lucky (feat. Pharrell Williams and Nile Rodgers)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": ", "
+                 },
+                 {
+                  "text": "Pharrell Williams"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Nile Rodgers"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Random Access Memories"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "6:10"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "iU7oF4OXZSE",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Lose Yourself to Dance (feat. Pharrell Williams)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Pharrell Williams"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Random Access Memories"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "5:54"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "tOaWhRATZqk",
+               "title": {
+                "runs": [
+                 {
+                  "text": "lock / unlock (con benny blanco)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "j-hope"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Nile Rodgers"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "HOPE ON THE STREET VOL.1"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2024"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:02"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "MR3uP7IYz44",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Lady (Hear Me Tonight)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Modjo"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Modjo"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2001"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "5:08"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "cy6Arnjp-hQ",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Treasure"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Bruno Mars"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Unorthodox Jukebox"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2012"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "2:59"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "qPRNIHxLhmc",
+               "title": {
+                "runs": [
+                 {
+                  "text": "I Feel It Coming (con Daft Punk)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "The Weeknd"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Starboy"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2016"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:30"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "dJqxQzxLbHM",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Happy (From \"Despicable Me 2\")"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Pharrell Williams"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "G I R L"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2014"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:54"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "b72gdhV_rXM",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Another One Bites The Dust"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Queen"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "The Game (Deluxe Edition)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "1980"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:35"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "TfMxqyEVqS0",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Lights Out"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Nubiyan Twist"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Nile Rodgers"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Lights Out"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2024"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:02"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "khnokW3Mw24",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Instant Crush (feat. Julian Casablancas)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Julian Casablancas"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Random Access Memories"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "5:38"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "UJHEK0GIdYE",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Blurred Lines (con T.I. y Pharrell)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Robin Thicke"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Blurred Lines"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:24"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "XsMpXczOIPs",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Adventure of a Lifetime"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Coldplay"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "A Head Full of Dreams"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2015"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:24"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "3WzamI8QD2s",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Rude"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "MAGIC!"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Don't Kill the Magic"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2014"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:45"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "wU26xVT_vBU",
+               "title": {
+                "runs": [
+                 {
+                  "text": "One More Time (Radio Edit)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "One More Time"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2000"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "5:21"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "fqqcXP1D0Fw",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Feels (con Pharrell Williams, Katy Perry y Big Sean)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Calvin Harris"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Funk Wav Bounces Vol.1"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2017"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:44"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "rnO-MflYxCw",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Pumped Up Kicks"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Foster The People"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Torches"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2011"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:00"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "OBM0DO8Xt1c",
+               "title": {
+                "runs": [
+                 {
+                  "text": "September"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Earth, Wind & Fire"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "September (sped up + slowed)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "1978"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:37"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "URzOGF_QGls",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Something About Us"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Something About Us (Love Theme from Interstella)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2003"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:53"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "EHQ6fyGrdfg",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Just a Cloud Away"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Pharrell Williams"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Despicable Me 2 (Original Motion Picture Soundtrack)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "2:57"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "z2qoihbzc3E",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Stayin Alive"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Bee Gees"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "The Ultimate Bee Gees"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2009"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:44"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "7JpV3QkWuBw",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Passion (con Nile Rodgers)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Roosevelt"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Nile Rodgers"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Passion (feat. Nile Rodgers)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2022"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:42"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "COz9lDCFHjw",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Passionfruit"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Drake"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "More Life"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2017"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:59"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "1Xfdjqa5dfY",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Wait a Minute!"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "WILLOW"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "ARDIPITHECUS"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2015"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:17"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "7CTJcHjkq0E",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Billie Jean"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Michael Jackson"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "HIStory: PAST, PRESENT AND FUTURE, BOOK I"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "1995"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:54"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "RBvx6cls0Y0",
+               "title": {
+                "runs": [
+                 {
+                  "text": "I Dance My Dance"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Nile Rodgers"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "CHIC"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "It’s About Time"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2018"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:28"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "xI9NfAetZyk",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Move Your Feet"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Junior Senior"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "D-D-Don't Don't Stop The Beat"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2002"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:02"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "zBqW6yKz8WA",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Could You Be Loved"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Bob Marley"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Uprising"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "1980"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:57"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "e-S1k9-soT4",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Cold Heart (PNAU Remix)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Elton John"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Dua Lipa"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "The Lockdown Sessions"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2021"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:23"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "F0FV9Mf4Psk",
+               "title": {
+                "runs": [
+                 {
+                  "text": "One More"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "SG Lewis"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Nile Rodgers"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "times"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2021"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:17"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "M4T_k33CI1M",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Cake By The Ocean"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "DNCE"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "DNCE"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2016"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:40"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "PvM79DJ2PmM",
+               "title": {
+                "runs": [
+                 {
+                  "text": "The Less I Know The Better"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Tame Impala"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Currents"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2015"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:37"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "mllzzUjMezU",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Shooting Stars"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Bag Raiders"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Bag Raiders (Deluxe)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2011"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:56"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "rXsQmkz1T7A",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Walking On A Dream"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Empire Of The Sun"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Walking On A Dream (10th Anniversary Edition)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2008"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:19"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "KYwA5k00p2I",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Just the Two of Us (Edit) (con Bill Withers)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Grover Washington, Jr."
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Lean on Me: The Best of Bill Withers"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "1994"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:58"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "zKSsP2084nU",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Give Life Back to Music"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Random Access Memories"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:36"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "MozAXGgC1Mc",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Sugar"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Maroon 5"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "V (Deluxe)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2014"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:56"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "Cz_-eTAWr9A",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Time of Our Lives"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Pitbull"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Ne-Yo"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Globalization"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2014"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:50"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "cS9RUWTyAXI",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Kangaroo Court"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Capital Cities"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "In A Tidal Wave of Mystery"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:44"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "Smi8vAbm_8o",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Digital Love"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Discovery"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2001"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "5:02"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "3vVSBLkpO-8",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Baby I'm Yours (con Irfane)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Breakbot"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Baby I'm Yours"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2010"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:36"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "QrYumeV6NXM",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Coach, I Hear You"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "DannyHO"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Miles of Gratitude"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2025"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:50"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "KFS9c852M_k",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Somebody's Watching Me"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Rockwell"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Somebody's Watching Me"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "1984"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:59"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "3rpQTqpFTF4",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Fragments of Time (feat. Todd Edwards)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Todd Edwards"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Random Access Memories"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:40"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "hJmYGnaZdKE",
+               "title": {
+                "runs": [
+                 {
+                  "text": "The Set Up"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Favored Nations"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "The Music of Grand Theft Auto V, Vol. 1: Original Music"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2013"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:04"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "lDK9fbutRZo",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Fresh"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Kool & The Gang"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Celebration: The Best Of Kool & The Gang (1979-1987)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "1994"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:25"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "B3ZodSS399g",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Your Lovin'"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Tonique & Man"
+                 },
+                 {
+                  "text": ", "
+                 },
+                 {
+                  "text": "Jean Tonique"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Mi Man"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Your Lovin'"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2026"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:28"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "qXI87eMP-bs",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Face to Face"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Daft Punk"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Discovery"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2001"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:01"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "4KVFYlQ39pM",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Alive"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "The Black Eyed Peas"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "THE E.N.D. (THE ENERGY NEVER DIES) (International Version)"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2009"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "5:04"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "BrZn9IU72TM",
+               "title": {
+                "runs": [
+                 {
+                  "text": "Disco Turbo"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Jafunk"
+                 },
+                 {
+                  "text": ", "
+                 },
+                 {
+                  "text": "Haile Supreme"
+                 },
+                 {
+                  "text": " y "
+                 },
+                 {
+                  "text": "Triple H Horns"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Disco Turbo"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2025"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "2:57"
+                 }
+                ]
+               }
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "videoId": "aJWbSXYB27s",
+               "title": {
+                "runs": [
+                 {
+                  "text": "She Knows It (Personal Effects, Pt. 2)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Chromeo"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "Adult Contemporary"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2024"
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "2:20"
+                 }
+                ]
+               }
+              }
+             }
+            ]
+           }
+          }
+         }
+        }
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

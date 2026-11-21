@@ -31,18 +31,26 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
 
       - name: Rust checks (clippy + tests)
         working-directory: src-tauri
+        # sin `|| cargo check`: ese atajo convertía un fallo de clippy en un
+        # éxito en cuanto `cargo check` pasaba, así que el gate no valía nada
         run: |
-          cargo clippy -- -D warnings || cargo check
+          cargo clippy --all-targets -- -D warnings
           cargo test
 
       - name: UI syntax check
         run: node --check ui/app.js
 
-      - name: UI lint
+      - name: UI lint + CSS build
         run: |
           npm ci
           npm run lint
+          npm test
+          npm run build:css

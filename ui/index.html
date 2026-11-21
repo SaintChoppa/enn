@@ -4,143 +4,427 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Enn</title>
+  <!-- Sprint 1 (T5): fondo antes de cualquier hoja de estilo, para que el
+       arranque nunca muestre un rectángulo blanco -->
+  <style>html,body{background:#09090b;color-scheme:dark}</style>
+  <!-- Tailwind compilado (utilidades + tema, sin preflight) va primero: las
+       reglas de styles.css no están en capa, así que siempre ganan sobre las
+       utilidades cuando ambas tocan lo mismo. -->
+  <!-- Fuentes autoalojadas (IBM Plex Sans, normal y cursiva). Solo declaraciones @font-face: el navegador
+       descarga únicamente los pesos/subconjuntos que el texto usa de verdad. -->
+  <link rel="icon" type="image/png" href="img/logo-silver-64.png" />
+  <link rel="stylesheet" href="fonts/fonts.css" />
+  <link rel="stylesheet" href="tw-output.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <canvas id="bg-visualizer" aria-hidden="true"></canvas>
+<body data-mode="simple" data-view="nowplaying">
+  <!-- Iconos: un único sprite, trazo a currentColor para que sigan al tema -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M20 21H4"/></symbol>
+    <symbol id="i-win-min" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+    <symbol id="i-win-max" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></symbol>
+    <symbol id="i-win-restore" viewBox="0 0 24 24"><rect x="5" y="9" width="10" height="10" rx="1.5"/><path d="M9 9V6.5A1.5 1.5 0 0 1 10.5 5h7A1.5 1.5 0 0 1 19 6.5v7a1.5 1.5 0 0 1-1.5 1.5H15"/></symbol>
+    <symbol id="i-win-close" viewBox="0 0 24 24"><path d="M7 7l10 10"/><path d="M17 7 7 17"/></symbol>
+    <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.2"/></symbol>
+    <symbol id="i-library" viewBox="0 0 24 24"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M18.5 10.5a6.5 6.5 0 0 1-13 0"/><path d="M12 17v4.5"/></symbol>
+    <symbol id="i-album" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"/><circle cx="7.5" cy="7.5" r=".8"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M16 2.5v4"/><path d="M8 2.5v4"/><path d="M3 10h18"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.7 9.7 0 0 0-6.7 2.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3.5 2"/></symbol>
+    <symbol id="i-playlist" viewBox="0 0 24 24"><path d="M21 15V6"/><circle cx="18.5" cy="15.5" r="2.5"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></symbol>
+    <symbol id="i-cloud-down" viewBox="0 0 24 24"><path d="M12 13v8"/><path d="m8.5 17.5 3.5 3.5 3.5-3.5"/><path d="M4.4 15.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.4 8.3"/></symbol>
+    <symbol id="i-mini" viewBox="0 0 24 24"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="m14 10 7-7"/><path d="m3 21 7-7"/></symbol>
+    <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10.5v6"/><path d="M9 13.5h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <!-- 2026-11-12: iconos redibujados de la cabecera de «Todas las pistas» y de las vistas -->
+    <symbol id="i-add-folder" viewBox="0 0 24 24"><path d="M11 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3.5"/><circle cx="17.5" cy="17.5" r="4.5"/><path d="M17.5 15.5v4"/><path d="M15.5 17.5h4"/></symbol>
+    <symbol id="i-add-files" viewBox="0 0 24 24"><path d="M12 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8l6 6v3"/><path d="M14 2v6h6"/><circle cx="15.5" cy="19.5" r="2.5"/><path d="M18 19.5V13l3 1.5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16"/><path d="M3 21v-5h5"/></symbol>
+    <symbol id="i-lay-rows" viewBox="0 0 24 24"><rect x="3" y="4" width="6" height="6" rx="1.5"/><path d="M12 6h9"/><path d="M12 9h5"/><rect x="3" y="14" width="6" height="6" rx="1.5"/><path d="M12 16h9"/><path d="M12 19h5"/></symbol>
+    <symbol id="i-lay-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></symbol>
+    <symbol id="i-lay-wheel" viewBox="0 0 24 24"><rect x="8" y="5" width="8" height="14" rx="1.6"/><path d="M5 7.5v9"/><path d="M2 9.5v5"/><path d="M19 7.5v9"/><path d="M22 9.5v5"/></symbol>
+    <symbol id="i-lay-compact" viewBox="0 0 24 24"><path d="M3 5h18"/><path d="M3 9.7h18"/><path d="M3 14.3h18"/><path d="M3 19h18"/></symbol>
+    <symbol id="i-rescan" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9 9.7 9.7 0 0 1 6.7 2.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.4 18.6a2 2 0 0 1-.9.5l-2.9.8.8-2.9a2 2 0 0 1 .5-.9z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol>
+    <symbol id="i-folder-open" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.2 10H20a2 2 0 0 1 1.9 2.5l-1.5 6a2 2 0 0 1-2 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H18a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 24 24"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="14" r="3.5"/><path d="M12 6.5h.01"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6a1.4 1.4 0 0 1-1 .4H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/></symbol>
+  </svg>
+
+  <!-- visualizador (Cinta / Traza, ui/viz/): un único canvas WebGL2 detrás de
+       toda la app. En Simple va difuminado; en Studio, nítido, y tras 5 s sin
+       actividad toma la pantalla (body[data-viz-takeover]). -->
+  <canvas id="viz" aria-hidden="true"></canvas>
+
   <div id="app" style="--qw: 330px">
-    <main id="library-pane">
-      <div id="lib-head">
-        <input id="search" type="search" placeholder="Buscar en tu música…" autocomplete="off" spellcheck="false" title="Filtros: artista:, album:, género:, año:, formato:, favorito:" aria-label="Buscar en tu música" />
-        <button id="btn-download" class="btn small" title="Descargar música (YouTube)">⬇ Descargar</button>
-        <button id="btn-folder" class="btn small" title="Añadir carpeta a la biblioteca">📁 Carpeta</button>
-        <button id="btn-files" class="btn small" title="Añadir archivos de audio">🎵 Archivos</button>
-        <button id="btn-rescan" class="btn small" title="Re-escaneo de las carpetas">↻</button>
-        <button id="btn-batch-tags" class="btn small" title="Editar artista/álbum de todas las canciones que coinciden con la búsqueda actual">✎ Lote</button>
-        <button id="btn-duplicates" class="btn small" title="Buscar pistas repetidas (mismo título y artista) en toda la biblioteca">🔍 Duplicados</button>
-        <button id="btn-save-m3u" class="btn small" title="Guardar la cola como .m3u">💾</button>
-        <button id="btn-open-m3u" class="btn small" title="Abrir playlist .m3u">📂</button>
+
+    <!-- ============================================ barra de título propia -->
+    <!-- data-tauri-drag-region solo actúa sobre el elemento que lo lleva, no
+         sobre sus hijos: por eso lo llevan también la marca y el hueco. -->
+    <header id="titlebar" data-tauri-drag-region class="relative z-40 flex items-center gap-3.5 border-b border-hairline bg-surface/85 pl-4">
+      <div class="flex w-[calc(var(--sw)-30px)] flex-none items-center gap-2.5" data-tauri-drag-region>
+        <!-- logo (ADR #132): silueta oscura + los claros de la cara en el color
+             de la canción. Dos máscaras PNG; el color lo pone --accent. -->
+        <span class="brand-logo pointer-events-none" aria-hidden="true"><i class="bl-ink"></i><i class="bl-light"></i></span>
+        <span class="tb-word pointer-events-none text-[13px] font-semibold uppercase tracking-[0.24em] text-ink">Enn</span>
       </div>
-      <div id="view-tabs">
-        <button id="tab-all" class="tab active">Todas</button>
-        <button id="tab-artist" class="tab">Por artista</button>
-        <button id="tab-genre" class="tab">Por género</button>
-        <button id="tab-year" class="tab">Por año</button>
-        <button id="tab-albums" class="tab">Álbumes</button>
-        <button id="tab-playlist" class="tab">Playlist</button>
-        <button id="tab-activity" class="tab">Actividad</button>
+
+      <label class="flex h-[30px] w-[min(360px,32vw)] items-center gap-2 rounded-lg border border-hairline bg-chip px-2.5 text-ink-faint transition-colors focus-within:border-hairline-hi focus-within:bg-white/[0.07]">
+        <svg class="ic size-[15px]" aria-hidden="true"><use href="#i-search" /></svg>
+        <input id="search" type="search" placeholder="Buscar en tu música…" autocomplete="off" spellcheck="false" title="Filtros: artista:, album:, género:, año:, formato:, favorito:" aria-label="Buscar en tu música" class="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-ink outline-none [font:inherit] placeholder:text-ink-faint" />
+      </label>
+
+      <div class="pointer-events-none flex-1 self-stretch" data-tauri-drag-region></div>
+
+      <div class="flex gap-0.5 rounded-lg border border-hairline bg-chip p-[3px]" role="radiogroup" aria-label="Modo de interfaz">
+        <button id="mode-simple" type="button" role="radio" aria-checked="true" class="h-6 cursor-pointer border-0 bg-transparent [font:inherit] rounded-[5px] px-3 text-xs font-medium text-ink-dim transition-colors hover:text-ink aria-checked:bg-white/10 aria-checked:text-ink aria-checked:shadow-[inset_0_0_0_1px_var(--border-hi)]">Simple</button>
+        <button id="mode-studio" type="button" role="radio" aria-checked="false" class="h-6 cursor-pointer border-0 bg-transparent [font:inherit] rounded-[5px] px-3 text-xs font-medium text-ink-dim transition-colors hover:text-ink aria-checked:bg-white/10 aria-checked:text-ink aria-checked:shadow-[inset_0_0_0_1px_var(--border-hi)]">Studio</button>
       </div>
-      <div id="pl-bar" class="hidden">
-        <input id="pl-name" type="text" placeholder="Nombre de la nueva playlist…" autocomplete="off" spellcheck="false" />
-        <button id="btn-pl-create" class="btn small primary">Crear playlist</button>
-        <button id="btn-pl-add" class="btn small" title="Añade la pista que está sonando a la playlist seleccionada">＋ Pista actual</button>
-        <span id="pl-info" class="pl-info"></span>
+
+      <!-- Ajustes: ventana flotante aparte (ADR #102), no una vista del escenario -->
+      <button id="btn-settings" class="icon-btn tb-settings" type="button" title="Ajustes" aria-label="Abrir los ajustes" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-settings" /></svg></button>
+
+      <!-- el único elemento que no sigue al color de la canción (PRD 6.1) -->
+      <button id="btn-download" type="button" title="Descargar música (YouTube, SoundCloud, Bandcamp…)" class="flex h-[30px] cursor-pointer items-center gap-1.5 rounded-lg border-0 bg-ivory pr-3.5 pl-[11px] text-[12.5px] font-semibold text-ivory-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_4px_16px_rgba(241,239,233,0.12)] transition [font:inherit] hover:bg-white active:scale-[0.97]">
+        <svg class="ic size-4 [stroke-width:2]" aria-hidden="true"><use href="#i-download" /></svg>
+        <span class="text-[12.5px] font-semibold">Descargar</span>
+        <!-- descargas en marcha: anillo de avance y cuántas quedan (Sprint 2) -->
+        <span id="dl-badge" class="dl-badge" hidden aria-hidden="true">
+          <svg class="dl-badge-ring" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" pathLength="100" /></svg>
+          <b id="dl-badge-n">0</b>
+        </span>
+      </button>
+
+      <div class="ml-1.5 flex self-stretch">
+        <button id="win-min" type="button" aria-label="Minimizar" class="win-btn"><svg class="ic size-4 [stroke-width:1.5]" aria-hidden="true"><use href="#i-win-min" /></svg></button>
+        <button id="win-max" type="button" aria-label="Maximizar" class="win-btn"><svg class="ic size-4 [stroke-width:1.5]" aria-hidden="true"><use href="#i-win-max" /></svg></button>
+        <button id="win-close" type="button" aria-label="Cerrar" class="win-btn close"><svg class="ic size-4 [stroke-width:1.5]" aria-hidden="true"><use href="#i-win-close" /></svg></button>
       </div>
-      <div id="lib-meta" class="pane-meta"></div>
-      <ul id="lib-list" class="track-list" tabindex="0" aria-label="Biblioteca: flechas para moverte, Enter para reproducir"></ul>
-      <div id="lib-empty" class="list-hint hidden">
-        Tu biblioteca está vacía.<br /><br />
-        Añade una <b>carpeta</b> con tu música (se escanea con subcarpetas) o archivos sueltos.<br />
-        Doble clic en una canción para reproducirla.
-      </div>
+    </header>
+
+    <!-- ============================================ menú lateral -->
+    <nav id="sidebar" aria-label="Secciones">
+      <button class="nav-item" type="button" data-nav="nowplaying">
+        <svg class="ic" aria-hidden="true"><use href="#i-disc" /></svg>
+        <span>Reproduciendo</span>
+        <i class="live-dot" aria-hidden="true"></i>
+      </button>
+
+      <p class="nav-sec">Biblioteca</p>
+      <button class="nav-item" type="button" data-nav="all"><svg class="ic" aria-hidden="true"><use href="#i-library" /></svg><span>Todas las pistas</span></button>
+      <button class="nav-item" type="button" data-nav="artist"><svg class="ic" aria-hidden="true"><use href="#i-mic" /></svg><span>Artistas</span></button>
+      <button class="nav-item" type="button" data-nav="albums"><svg class="ic" aria-hidden="true"><use href="#i-album" /></svg><span>Álbumes</span></button>
+      <button class="nav-item" type="button" data-nav="genre"><svg class="ic" aria-hidden="true"><use href="#i-tag" /></svg><span>Géneros</span></button>
+      <button class="nav-item" type="button" data-nav="year"><svg class="ic" aria-hidden="true"><use href="#i-calendar" /></svg><span>Por año</span></button>
+      <button class="nav-item" type="button" data-nav="activity"><svg class="ic" aria-hidden="true"><use href="#i-history" /></svg><span>Actividad</span></button>
+
+      <p class="nav-sec">Colección</p>
+      <button class="nav-item" type="button" data-nav="playlist"><svg class="ic" aria-hidden="true"><use href="#i-playlist" /></svg><span>Playlists</span></button>
+      <button class="nav-item" type="button" data-nav="downloads"><svg class="ic" aria-hidden="true"><use href="#i-cloud-down" /></svg><span>Descargas</span></button>
+
+    </nav>
+
+    <!-- ============================================ escenario central -->
+    <!-- El escenario es una COLUMNA: el ecualizador (solo Studio) ocupa su
+         propia fila a todo lo ancho y, debajo, la portada y el panel de la
+         vista activa se reparten una fila. Antes el panel del ecualizador
+         vivía dentro de la columna de la biblioteca y acababa con ~200 px,
+         que no dan ni para las 10 bandas ni para el paramétrico. -->
+    <main id="stage">
+
+      <!-- Solo Studio: el ecualizador, a todo el ancho del escenario. Lo llena
+           `placeEq()` moviendo el nodo real `.mix-eq`; en Simple vuelve al
+           mezclador. No lleva `hidden` (esa clase gana a la regla de modo y
+           dejaría el panel invisible): `studio-only` ya lo oculta en Simple. -->
+      <section id="stage-eq" class="studio-only overflow-hidden rounded-xl border border-hairline bg-panel bg-[image:linear-gradient(var(--tint),var(--tint))]" aria-label="Ecualizador"></section>
+
+      <!-- Fila de vistas: la portada es la columna fija del escenario y a su
+           derecha se turnan la biblioteca y las descargas (body[data-view]). -->
+      <div id="stage-views">
+
+      <!-- Reproduciendo (inicio del Modo Simple). Conserva el id de la antigua
+           vista a pantalla completa para que su código de espectro siga igual. -->
+      <section id="now-playing" class="view" data-view="nowplaying" aria-label="Reproduciendo ahora">
+        <button id="np-close" class="icon-btn" type="button" hidden aria-label="Cerrar"></button>
+
+        <!-- Bloque de reproducción + su cromo (dock de salida y botón del
+             ecualizador). Va en una sola caja para que `#np-block` se centre
+             entero —carátula, rótulo, título, artista, progreso, transporte y
+             dock— en el hueco que queda por encima de la cola. El margen
+             automático de la caja (ver styles.css) reparte ese hueco a partes
+             iguales; con la cola fuera de la caja, el centro del bloque y el
+             del hueco coinciden. -->
+        <div id="np-block">
+          <div class="np-card">
+            <div class="np-art-wrap">
+              <div class="np-halo" aria-hidden="true"></div>
+              <img id="np-art" alt="" class="hidden" />
+              <div id="np-placeholder" class="np-placeholder">
+                <svg class="ic" aria-hidden="true"><use href="#i-disc" /></svg>
+              </div>
+            </div>
+
+            <p class="np-kicker"><i class="live-dot" aria-hidden="true"></i><span>Reproduciendo ahora</span></p>
+            <div id="np-title">—</div>
+            <div id="np-artist"></div>
+
+            <!-- aquí se mudan la barra de progreso y la botonera del pie -->
+            <div id="np-slot-seek" class="np-slot"></div>
+            <div id="np-slot-transport" class="np-slot"></div>
+          </div>
+
+          <!-- El dock de salida y el botón del ecualizador comparten fila: el
+               botón sigue visible y alcanzable, pero deja de ser una fila propia
+               (era lo que descolocaba el centrado y robaba alto en ventanas
+               bajas). Los nodos reales los mudan `placeParts` y `placeEq`. -->
+          <div id="np-dock-row">
+            <div id="np-slot-dock" class="np-dock"></div>
+            <div id="np-slot-eq" class="np-slot-eq simple-only"></div>
+          </div>
+          <!-- Simple: el botón plateado «Ecualizador» despliega aquí Graves,
+               Agudos, Fade y las 10 bandas (ADR #106). Lo llena placeEq(). -->
+          <div id="np-eq-drawer" class="np-drawer simple-only" data-open="0">
+            <div class="np-drawer-inner"></div>
+          </div>
+        </div>
+
+        <!-- En Simple, la cola de «Siguientes» se muda aquí (mismo nodo que la
+             columna derecha, ver placeQueue): aparece bajo la portada en cristal
+             y nunca hay dos listas a la vez. En Studio queda vacío. -->
+        <div id="np-slot-queue" class="np-slot-queue"></div>
+      </section>
+
+      <!-- Biblioteca -->
+      <section id="view-library" class="view" data-view="library" aria-label="Biblioteca">
+
+        <!-- asa de arrastre del panel (mismo lenguaje que #split, `cursor:
+             col-resize`): cambia el ancho del panel de pistas. Vive aquí para
+             ocultarse y mostrarse con la vista. -->
+        <div id="lib-resize" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Ajustar el ancho del panel de pistas" title="Arrastra para ajustar el ancho del panel"></div>
+
+        <!-- Solo Studio: datos reales de la pista que suena, nada inventado -->
+        <!-- Ojo: NO lleva la clase 'hidden'. Esa regla (.hidden { display: none
+             !important }) gana a la de modo y la dejaba invisible para siempre;
+             quien la oculta en Simple es 'studio-only'. -->
+        <div id="studio-telemetry" class="studio-only grid-cols-5 divide-x divide-hairline overflow-hidden rounded-xl border border-hairline bg-panel bg-[image:linear-gradient(var(--tint),var(--tint))]" aria-label="Datos de la señal">
+          <div class="flex min-w-0 flex-col gap-[3px] px-3.5 py-2.5"><span class="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Formato</span><span class="truncate text-[13.5px] font-semibold tabular-nums text-ink" id="tm-format">—</span></div>
+          <div class="flex min-w-0 flex-col gap-[3px] px-3.5 py-2.5"><span class="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Muestreo</span><span class="truncate text-[13.5px] font-semibold tabular-nums text-ink" id="tm-rate">—</span></div>
+          <div class="flex min-w-0 flex-col gap-[3px] px-3.5 py-2.5"><span class="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Profundidad</span><span class="truncate text-[13.5px] font-semibold tabular-nums text-ink" id="tm-bits">—</span></div>
+          <div class="flex min-w-0 flex-col gap-[3px] px-3.5 py-2.5"><span class="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Bitrate</span><span class="truncate text-[13.5px] font-semibold tabular-nums text-ink" id="tm-kbps">—</span></div>
+          <div class="flex min-w-0 flex-col gap-[3px] px-3.5 py-2.5"><span class="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Salida</span><span class="truncate text-[13.5px] font-semibold tabular-nums text-ink" id="tm-out">—</span></div>
+        </div>
+
+        <div id="library-pane">
+          <div id="lib-head">
+            <!-- acciones con el mismo estilo que el selector de vista (ADR #157) -->
+            <div class="lib-pill lib-actions" role="group" aria-label="Añadir música">
+              <button id="btn-folder" type="button" title="Añadir una carpeta" aria-label="Añadir una carpeta a la biblioteca"><svg class="ic" aria-hidden="true"><use href="#i-add-folder" /></svg></button>
+              <button id="btn-files" type="button" title="Añadir archivos" aria-label="Añadir archivos de audio sueltos"><svg class="ic" aria-hidden="true"><use href="#i-add-files" /></svg></button>
+              <button id="btn-rescan" type="button" title="Volver a leer las carpetas" aria-label="Volver a leer las carpetas"><svg class="ic" aria-hidden="true"><use href="#i-refresh" /></svg></button>
+            </div>
+            <!-- cómo se ven las canciones en «Todas las pistas» (ADR #153) -->
+            <div id="lib-layouts" class="lib-pill lib-layouts" role="radiogroup" aria-label="Cómo se ven las canciones">
+              <button type="button" role="radio" data-layout="rows" title="Filas" aria-label="Filas"><svg class="ic" aria-hidden="true"><use href="#i-lay-rows" /></svg></button>
+              <button type="button" role="radio" data-layout="grid" title="Cuadrícula" aria-label="Cuadrícula"><svg class="ic" aria-hidden="true"><use href="#i-lay-grid" /></svg></button>
+              <button type="button" role="radio" data-layout="wheel" title="Rueda" aria-label="Rueda"><svg class="ic" aria-hidden="true"><use href="#i-lay-wheel" /></svg></button>
+              <button type="button" role="radio" data-layout="compact" title="Compacta" aria-label="Compacta"><svg class="ic" aria-hidden="true"><use href="#i-lay-compact" /></svg></button>
+            </div>
+            <span class="lib-head-gap" aria-hidden="true"></span>
+            <div class="lib-pill lib-actions studio-only" role="group" aria-label="Herramientas de la biblioteca">
+              <button id="btn-batch-tags" type="button" title="Editar en lote (artista/álbum de lo que coincide con la búsqueda)" aria-label="Editar en lote el artista y el álbum de las canciones que coinciden con la búsqueda"><svg class="ic" aria-hidden="true"><use href="#i-pencil" /></svg></button>
+              <button id="btn-duplicates" type="button" title="Buscar duplicados" aria-label="Buscar pistas repetidas en toda la biblioteca"><svg class="ic" aria-hidden="true"><use href="#i-copy" /></svg></button>
+              <button id="btn-save-m3u" type="button" title="Guardar la cola como .m3u" aria-label="Guardar la cola como .m3u"><svg class="ic" aria-hidden="true"><use href="#i-save" /></svg></button>
+              <button id="btn-open-m3u" type="button" title="Abrir playlist .m3u" aria-label="Abrir playlist .m3u"><svg class="ic" aria-hidden="true"><use href="#i-folder-open" /></svg></button>
+            </div>
+            <!-- contraer/desplegar el panel de pistas (recuerda su estado).
+                 Al extremo de la cabecera por el hueco flexible de arriba. -->
+            <button id="btn-lib-collapse" class="btn small icon-only" type="button" hidden aria-expanded="true" aria-controls="lib-body" title="Contraer el panel de pistas" aria-label="Contraer el panel de pistas">
+              <svg class="ic" aria-hidden="true"><use href="#i-chevron" /></svg>
+            </button>
+          </div>
+
+          <!-- cuerpo del panel: lo que se oculta al contraerlo. `aria-controls`
+               del botón apunta a este id. -->
+          <div id="lib-body">
+
+          <!-- las pestañas originales siguen existiendo (app.js las usa) pero
+               ahora las maneja el menú lateral; no se muestran -->
+          <div id="view-tabs" hidden>
+            <button id="tab-all" class="tab active" type="button">Todas</button>
+            <button id="tab-artist" class="tab" type="button">Por artista</button>
+            <button id="tab-genre" class="tab" type="button">Por género</button>
+            <button id="tab-year" class="tab" type="button">Por año</button>
+            <button id="tab-albums" class="tab" type="button">Álbumes</button>
+            <button id="tab-playlist" class="tab" type="button">Playlist</button>
+            <button id="tab-activity" class="tab" type="button">Actividad</button>
+          </div>
+
+          <div id="pl-bar" class="hidden">
+            <input id="pl-name" type="text" placeholder="Nombre de la nueva playlist…" autocomplete="off" spellcheck="false" />
+            <button id="btn-pl-create" class="btn small primary" type="button">Crear playlist</button>
+            <button id="btn-pl-add" class="btn small" type="button" title="Añade la pista que está sonando a la playlist seleccionada">＋ Pista actual</button>
+            <span id="pl-info" class="pl-info"></span>
+          </div>
+          <div class="lib-bar">
+            <div id="lib-meta" class="pane-meta"></div>
+            <!-- orden de «Todas las pistas» (ADR #125); lo rellena app.js -->
+            <div id="lib-sortbox" class="lib-sort">
+              <select id="lib-sort" aria-label="Ordenar las pistas por"></select>
+              <button id="lib-sort-dir" class="icon-btn" type="button" aria-label="Invertir el orden" title="Invertir el orden"><svg class="ic" aria-hidden="true"><use href="#i-chevron" /></svg></button>
+            </div>
+          </div>
+          <ul id="lib-list" class="track-list" tabindex="0" aria-label="Biblioteca: flechas para moverte, Enter para reproducir"></ul>
+          <!-- Estado vacío: explica qué pasa y ofrece la acción que lo resuelve.
+               app.js elige el texto (primer uso / sin audio / sin resultados). -->
+          <div id="lib-empty" class="empty hidden">
+            <svg class="empty-ic" aria-hidden="true"><use href="#i-music" /></svg>
+            <p class="empty-title" id="empty-title">Tu música, en tu equipo</p>
+            <p class="empty-text" id="empty-text">Sin cuentas, sin suscripciones y sin telemetría: lo que suena son tus archivos.</p>
+            <div class="empty-actions">
+              <button id="empty-folder" class="btn primary small" type="button"><svg class="ic" aria-hidden="true"><use href="#i-folder-plus" /></svg><span>Añadir carpeta</span></button>
+              <button id="empty-files" class="btn small" type="button"><svg class="ic" aria-hidden="true"><use href="#i-music" /></svg><span>Añadir archivos</span></button>
+              <button id="empty-rescan" class="btn small hidden" type="button"><svg class="ic" aria-hidden="true"><use href="#i-rescan" /></svg><span>Re-escanear</span></button>
+              <button id="empty-clear" class="btn small hidden" type="button"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg><span>Limpiar búsqueda</span></button>
+            </div>
+            <p class="empty-hint" id="empty-hint"></p>
+          </div>
+          </div><!-- /#lib-body -->
+        </div>
+      </section>
+
+      <!-- Descargas -->
+      <section id="view-downloads" class="view" data-view="downloads" aria-label="Descargas">
+        <section id="downloader" class="mixer">
+          <div class="mix-row dl-row">
+            <div class="dl-left">
+              <div class="dl-title">
+                <span>Descargar música</span>
+                <!-- cerrar el panel: misma acción que volver a pulsar «Descargar» -->
+                <button id="btn-dl-close" class="icon-btn dl-close" type="button" title="Cerrar las descargas (Esc)" aria-label="Cerrar las descargas"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>
+              </div>
+              <!-- formato de las descargas, a mano (ADR #159); el mismo que Ajustes → Descargas -->
+              <div class="dl-fmt-row">
+                <span class="dl-fmt-label" id="dl-fmt-label">Formato</span>
+                <div id="dl-fmt-pick" class="lib-pill fmt-pill" role="radiogroup" aria-labelledby="dl-fmt-label">
+                  <button type="button" role="radio" data-fmt="m4a" title="M4A (AAC): el audio tal como lo sirve YouTube, sin recomprimir. Archivos pequeños">M4A</button>
+                  <button type="button" role="radio" data-fmt="mp3" title="MP3: el más compatible con cualquier aparato, se recomprime (pierde algo de calidad)">MP3</button>
+                  <button type="button" role="radio" data-fmt="flac" title="FLAC: contenedor sin pérdida. Ojo: la fuente de YouTube ya viene comprimida, así que no suena mejor que M4A; solo ocupa más">FLAC</button>
+                </div>
+                <!-- descargas en marcha: cuántas, velocidad total y «Cancelar todas».
+                     Va en esta fila para no empujar los resultados al aparecer -->
+                <div id="dl-summary" class="dl-summary" hidden aria-live="polite">
+                  <span id="dl-summary-text"></span>
+                  <button id="btn-dl-cancel-all" class="btn small ghost" type="button">Cancelar todas</button>
+                </div>
+              </div>
+              <div class="dl-url-row">
+                <input id="dl-url" type="text" placeholder="Pega un enlace o una lista completa (YouTube, SoundCloud, Bandcamp…)…" autocomplete="off" spellcheck="false" />
+                <button id="btn-dl-start" class="btn primary small" type="button">Descargar</button>
+              </div>
+              <!-- avisos fijos: cola detenida o sin terminar del último cierre (Sprint 2) -->
+              <div id="dl-banner" class="dl-banner" hidden role="status"></div>
+              <!-- resultados del buscador: pastillas de canciones y álbumes (search.js) -->
+              <div id="dl-results" class="dl-results" hidden aria-live="polite"></div>
+              <!-- descargas por enlace como pastillas (sustituye a la lista vieja, ADR #122) -->
+              <div id="dl-active" class="pills dl-active" hidden></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      </div><!-- /#stage-views -->
     </main>
 
-    <aside id="queue-panel">
-      <div class="panel-head">
-        <span id="queue-title">Siguientes</span>
-        <div class="panel-actions">
-          <button id="btn-radio" class="icon-btn" title="Modo radio: al acabar la cola, sugiere música parecida de tu biblioteca">📻</button>
-          <button id="btn-clear" class="icon-btn" title="Vaciar la cola">✕</button>
+    <!-- ============================================ columna derecha (fija) -->
+    <div id="rail">
+      <section id="mixer" class="mixer" aria-label="Mezclador">
+        <!-- Solo Studio: devuelve TODO el mezclador y el ecualizador a neutro de
+             golpe, sin confirmación. Reutiliza los manejadores reales de cada
+             control (los mismos que aplican cada ajuste al motor). -->
+        <div class="mix-head studio-only">
+          <span class="mix-head-title">Mezclador</span>
+          <button id="btn-mix-reset" class="btn small ghost" type="button" title="Reestablecer el mezclador y el ecualizador" aria-label="Reestablecer el mezclador y el ecualizador">
+            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" /><path d="M3 3v5h5" /></svg>
+            <span>Reestablecer</span>
+          </button>
         </div>
-      </div>
-      <ul id="queue" class="track-list"></ul>
-      <div id="queue-hint" class="list-hint">
-        Lo que suene después aparecerá aquí.
-      </div>
-    </aside>
-
-    <section id="mixer" class="mixer hidden">
-      <div class="mix-row">
-        <div class="mix-tone">
-          <canvas id="spectrum" width="280" height="56"></canvas>
-          <label>Graves <input type="range" id="mix-bass" min="-12" max="12" step="0.5" value="0" /></label>
-          <label>Agudos <input type="range" id="mix-treble" min="-12" max="12" step="0.5" value="0" /></label>
-          <label>Balance <input type="range" id="mix-balance" min="-100" max="100" step="1" value="0" /></label>
-          <label>Fade <input type="range" id="mix-fade" min="0" max="12" step="0.5" value="0" /><span id="mix-fade-val">0 s</span></label>
-          <label>Pista <input type="range" id="mix-track" min="-12" max="12" step="1" value="0" disabled /><span id="mix-track-val">0 dB</span></label>
-          <label class="rg-row">
-            <input type="checkbox" id="mix-rg" checked />
-            <span>Normalizar volumen (ReplayGain)</span>
-            <button id="btn-rg-scan" class="btn small" title="Analiza la sonoridad de toda la biblioteca (EBU R128)">Analizar</button>
-          </label>
-          <label class="rg-row" title="Usa la sonoridad media del disco (artista + álbum) para conservar las diferencias internas del álbum">
-            <input type="checkbox" id="mix-rg-album" />
-            <span>Por álbum (conserva la dinámica del disco)</span>
-          </label>
-          <label class="rg-row">Temporizador
-            <select id="mix-sleep">
-              <option value="0">Apagado</option>
-              <option value="15">15 min</option>
-              <option value="30">30 min</option>
-              <option value="60">60 min</option>
-            </select>
-          </label>
-          <label class="rg-row" title="Salta el mezclador de Windows y abre el dispositivo a la tasa nativa del archivo (Hi-Res bit-perfect). Usa el dispositivo predeterminado del sistema.">
-            <input type="checkbox" id="mix-exclusive" />
-            <span>Salida exclusiva (bit-perfect)</span>
-          </label>
-          <span id="rg-status" class="rg-status"></span>
-        </div>
-        <div class="mix-eq">
-          <div class="mix-eq-top">
-            <span>Ecualizador</span>
-            <select id="eq-preset">
-              <option value="">Personalizado</option>
-              <option value="flat">Plano</option>
-              <option value="rock">Rock</option>
-              <option value="pop">Pop</option>
-              <option value="clasica">Clásica</option>
-              <option value="bajos">Bajos +</option>
-              <option value="voz">Voz</option>
-              <option value="treble">Agudos +</option>
-            </select>
-            <button id="btn-eq-reset" class="icon-btn" title="Plano">0</button>
+        <div class="mix-row">
+          <div class="mix-tone">
+            <canvas id="spectrum" width="280" height="56"></canvas>
+            <label><span class="mx-l">Graves</span><input type="range" id="mix-bass" min="-12" max="12" step="0.5" value="0" /><span id="mix-bass-val" class="mx-v">0 dB</span></label>
+            <label><span class="mx-l">Agudos</span><input type="range" id="mix-treble" min="-12" max="12" step="0.5" value="0" /><span id="mix-treble-val" class="mx-v">0 dB</span></label>
+            <label class="studio-only"><span class="mx-l">Balance</span><input type="range" id="mix-balance" min="-100" max="100" step="1" value="0" /><span id="mix-balance-val" class="mx-v">C</span></label>
+            <label><span class="mx-l">Fade</span><input type="range" id="mix-fade" min="0" max="12" step="0.5" value="0" /><span id="mix-fade-val" class="mx-v">0 s</span></label>
+            <label class="studio-only"><span class="mx-l">Pista</span><input type="range" id="mix-track" min="-12" max="12" step="1" value="0" disabled /><span id="mix-track-val" class="mx-v">0 dB</span></label>
+            <label class="rg-row mx-sleep studio-only"><span class="mx-l">Temporizador</span>
+              <select id="mix-sleep">
+                <option value="0">Apagado</option>
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">60 min</option>
+              </select>
+            </label>
           </div>
-          <div id="eq-bands" class="eq-bands"></div>
-          <div id="eq-param" class="eq-param"></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="downloader" class="mixer hidden">
-      <div class="mix-row dl-row">
-        <div class="dl-left">
-          <div class="dl-title">
-            <span>▼ Descargar música</span>
-            <span id="dl-target" class="dl-target"></span>
-            <button id="btn-dl-dir" class="btn small" title="Cambiar carpeta de descarga">📂 Cambiar carpeta</button>
+          <button id="btn-eq-open" class="btn small eq-open simple-only" type="button" aria-expanded="false" aria-controls="mix-eq-box" title="Mostrar u ocultar el ecualizador"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 4v16M12 4v16M18 4v16" /><circle cx="6" cy="15" r="1.9" fill="currentColor" stroke="none" /><circle cx="12" cy="8" r="1.9" fill="currentColor" stroke="none" /><circle cx="18" cy="13" r="1.9" fill="currentColor" stroke="none" /></g></svg><span>Ecualizador</span></button>
+          <div class="mix-eq" id="mix-eq-box" data-collapsed="1">
+            <div class="mix-eq-top">
+              <span>Ecualizador</span>
+              <select id="eq-preset">
+                <option value="">Personalizado</option>
+                <option value="flat">Plano</option>
+                <option value="rock">Rock</option>
+                <option value="pop">Pop</option>
+                <option value="clasica">Clásica</option>
+                <option value="bajos">Bajos +</option>
+                <option value="voz">Voz</option>
+                <option value="treble">Agudos +</option>
+              </select>
+              <button id="btn-eq-param" class="btn small studio-only" type="button" aria-pressed="true" title="Mostrar u ocultar el ecualizador paramétrico"><span>Paramétrico</span></button>
+              <button id="btn-eq-reset" class="icon-btn" type="button" title="Plano">0</button>
+            </div>
+            <div id="eq-bands" class="eq-bands"></div>
+            <div id="eq-param" class="eq-param studio-only"></div>
           </div>
-          <div class="dl-url-row">
-            <input id="dl-url" type="text" placeholder="Pega un enlace o una lista completa (YouTube, SoundCloud, Bandcamp…)…" autocomplete="off" spellcheck="false" />
-            <select id="dl-fmt" title="Formato de destino">
-              <option value="m4a">M4A · mejor calidad</option>
-              <option value="mp3">MP3</option>
-              <option value="flac">FLAC sin pérdida</option>
-            </select>
-            <button id="btn-dl-start" class="btn primary small">Descargar</button>
-          </div>
-          <div id="dl-list" class="dl-list"></div>
         </div>
-      </div>
-    </section>
+      </section>
 
+      <aside id="queue-panel">
+        <div class="panel-head">
+          <span id="queue-title">Siguientes</span>
+          <div class="panel-actions">
+            <button id="btn-radio" class="icon-btn" type="button" title="Modo radio: al acabar la cola, sugiere música parecida de tu biblioteca" aria-label="Modo radio"><svg class="ic r-mono" aria-hidden="true"><use href="#i-radio" /></svg><svg class="r-multi" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="g-radio" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5fa2"/><stop offset=".35" stop-color="#ffb347"/><stop offset=".65" stop-color="#5fe3c0"/><stop offset="1" stop-color="#7a8cff"/></linearGradient></defs><g fill="none" stroke="url(#g-radio)" stroke-width="1.9" stroke-linecap="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></g><circle cx="12" cy="12" r="2.3" fill="url(#g-radio)"/></svg></button>
+            <button id="btn-clear" class="icon-btn" type="button" title="Vaciar la cola" aria-label="Vaciar la cola"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>
+          </div>
+        </div>
+        <ul id="queue" class="track-list"></ul>
+        <div id="queue-hint" class="list-hint">
+          Lo que suene después aparecerá aquí.
+        </div>
+      </aside>
+    </div>
+
+    <!-- ============================================ barra inferior -->
+    <!-- La botonera, la barra de progreso y el dock de salida viven aquí, pero
+         en Simple + "Reproduciendo" se mudan al escenario (mismos nodos, así
+         que sus eventos siguen enganchados): nunca se ven dos veces. -->
     <footer id="controls">
-      <button id="btn-shuffle" class="ctl mode" title="Aleatorio: off" aria-label="Aleatorio" aria-pressed="false">🔀<i>off</i></button>
-      <button id="btn-repeat" class="ctl mode" title="Repetición: off" aria-label="Repetición" aria-pressed="false">🔁<i>off</i></button>
-      <button id="btn-prev" class="ctl" title="Anterior" aria-label="Pista anterior">⏮</button>
-      <button id="btn-play" class="ctl big" title="Reproducir/Pausar (espacio)" aria-label="Reproducir o pausar">▶</button>
-      <button id="btn-next" class="ctl" title="Siguiente" aria-label="Siguiente pista">⏭</button>
-      <div class="ctl-meta" id="ctl-meta" title="Ver a pantalla completa">
+      <div id="transport">
+        <!-- sin botón de aleatorio: lo sustituye el modo radio (ADR #154) -->
+        <button id="btn-prev" class="ctl" type="button" title="Anterior" aria-label="Pista anterior"></button>
+        <button id="btn-play" class="ctl big" type="button" title="Reproducir/Pausar (espacio)" aria-label="Reproducir o pausar"></button>
+        <button id="btn-next" class="ctl" type="button" title="Siguiente" aria-label="Siguiente pista"></button>
+        <button id="btn-repeat" class="ctl mode" type="button" title="Repetición: off" aria-label="Repetición" aria-pressed="false"></button>
+      </div>
+      <div class="ctl-meta" id="ctl-meta" title="Ver la portada grande">
         <img id="mini-art" class="mini-art hidden" alt="" />
         <span id="mini-title">—</span>
         <span id="quality-badge" class="quality-badge hidden" title="Calidad de la fuente: formato, tasa de muestreo y profundidad/tasa de bits del archivo"></span>
@@ -151,17 +435,19 @@
         <input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="Posición de reproducción" />
         <span id="t-dur" class="tm">0:00</span>
       </div>
-      <button id="btn-mixer" class="ctl small" title="Mezclador (EQ, tono, balance, fade)" aria-label="Abrir mezclador">🎛️</button>
-      <button id="btn-mini" class="ctl small" title="Modo mini (doble clic aquí para volver)" aria-label="Modo mini">🗕</button>
-      <label class="dev" title="Dispositivo de salida">
-        <select id="device" aria-label="Dispositivo de salida de audio">
-          <option value="">Predeterminado</option>
-        </select>
-      </label>
-      <label class="vol" title="Volumen">
-        <input type="range" id="volume" min="0" max="150" value="80" aria-label="Volumen" />
-        <span id="vol-num">80</span>
-      </label>
+      <!-- el mezclador ya está fijo en la columna derecha; el botón se
+           conserva oculto porque el atajo global Ctrl+Alt+M lo pulsa -->
+      <button id="btn-mixer" class="ctl small" type="button" hidden aria-label="Mezclador"></button>
+      <div id="outdock">
+        <!-- altavoz: abre la lista de salidas de audio (ADR #143) -->
+        <button id="btn-output" class="dock-label icon-btn" type="button" title="Salida de audio" aria-label="Elegir la salida de audio" aria-haspopup="listbox"><svg class="ic" aria-hidden="true"><use href="#i-speaker" /></svg></button>
+        <label class="vol" title="Volumen">
+          <svg class="ic" aria-hidden="true"><use href="#i-volume" /></svg>
+          <input type="range" id="volume" min="0" max="150" value="80" aria-label="Volumen" />
+          <span id="vol-num">80</span>
+        </label>
+        <button id="btn-mini" class="ctl small" type="button" title="Modo mini (doble clic aquí para volver)" aria-label="Modo mini"><svg class="ic" aria-hidden="true"><use href="#i-mini" /></svg></button>
+      </div>
     </footer>
 
     <div id="split" title="Arrastra para ajustar el ancho"></div>
@@ -170,26 +456,154 @@
       <div class="props-card">
         <div class="props-head">
           <span id="props-title">Propiedades</span>
-          <button id="props-close" class="icon-btn" title="Cerrar" aria-label="Cerrar">✕</button>
+          <button id="props-close" class="icon-btn" type="button" title="Cerrar" aria-label="Cerrar"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>
         </div>
         <dl id="props-body"></dl>
       </div>
     </div>
-    <div id="toast" class="hidden"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
     <datalist id="artists-datalist"></datalist>
     <datalist id="albums-datalist"></datalist>
-
-    <div id="now-playing" class="hidden" aria-hidden="true">
-      <canvas id="np-spectrum"></canvas>
-      <button id="np-close" class="icon-btn" title="Cerrar (Esc)" aria-label="Cerrar vista a pantalla completa">✕</button>
-      <div class="np-card">
-        <img id="np-art" alt="" class="hidden" />
-        <div id="np-placeholder" class="np-placeholder hidden">♪</div>
-        <div id="np-title">—</div>
-        <div id="np-artist"></div>
-      </div>
-    </div>
   </div>
+  <!-- ============================================ Ajustes (ventana aparte, ADR #102/#103) -->
+  <dialog id="settings-dlg" class="settings-dlg" aria-labelledby="settings-title">
+    <div class="sd-head">
+      <h2 id="settings-title">Ajustes</h2>
+      <button id="settings-close" class="icon-btn" type="button" title="Cerrar (Esc)" aria-label="Cerrar los ajustes"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>
+    </div>
+    <div class="sd-body">
+      <section class="sd-sec" aria-labelledby="sd-audio">
+        <h3 id="sd-audio" class="sd-title">Audio</h3>
+        <div class="sd-row">
+          <span class="sd-label">Salida</span>
+          <label class="dev" title="Dispositivo de salida">
+          <select id="device" aria-label="Dispositivo de salida de audio">
+            <option value="">Predeterminado</option>
+          </select>
+          </label>
+        </div>
+        <label class="sd-check" title="Salta el mezclador de Windows y abre el dispositivo a la tasa nativa del archivo (Hi-Res bit-perfect). Usa el dispositivo predeterminado del sistema.">
+          <input type="checkbox" id="mix-exclusive" />
+          <span>Salida exclusiva (bit-perfect)</span>
+        </label>
+        <label class="sd-check" title="Mide lo fuerte que suena cada canción (en segundo plano, al abrir Enn y tras cada descarga) y la sube o baja para que todas suenen parecido. La barra de volumen se mueve sola al cambiar de canción.">
+          <input type="checkbox" id="mix-rg" checked />
+          <span>Igualar el volumen entre canciones</span>
+        </label>
+        <label class="sd-check" title="Usa la sonoridad media del disco (artista + álbum) para conservar las diferencias internas del álbum">
+          <input type="checkbox" id="mix-rg-album" />
+          <span>Por álbum (conserva la dinámica del disco)</span>
+        </label>
+        <div class="sd-row">
+          <button id="btn-rg-scan" class="btn small" type="button" title="Se hace solo; este botón lo lanza ya (EBU R128)">Analizar ahora</button>
+          <span id="rg-status" class="rg-status"></span>
+        </div>
+      </section>
+
+      <section class="sd-sec" aria-labelledby="sd-viz">
+        <h3 id="sd-viz" class="sd-title">Visualizador</h3>
+        <div id="viz-settings"></div>
+      </section>
+
+      <section class="sd-sec" aria-labelledby="sd-ui">
+        <h3 id="sd-ui" class="sd-title">Interfaz</h3>
+        <div class="sd-row">
+          <span class="sd-label">Al abrir</span>
+          <select id="set-start-mode" aria-label="Modo con el que abre la app">
+            <option value="last">El último modo usado</option>
+            <option value="simple">Simple</option>
+            <option value="studio">Studio</option>
+          </select>
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">Reproduciendo</span>
+          <select id="set-npview" aria-label="Vista de Reproduciendo">
+            <option value="stage">Escenario (radio junto a la carátula, centrado al reposar)</option>
+            <option value="classic">Clásica</option>
+          </select>
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">Inactividad</span>
+          <select id="set-idle" aria-label="Cuándo se ocultan los controles en Simple">
+            <option value="3000">Ocultar controles tras 3 s</option>
+            <option value="5000">Tras 5 s</option>
+            <option value="10000">Tras 10 s</option>
+            <option value="0">Nunca</option>
+          </select>
+        </div>
+        <label class="sd-check" title="Enn se abre al iniciar sesión en Windows, escondido en la bandeja (junto al reloj)">
+          <input type="checkbox" id="set-autostart" />
+          <span>Abrir con Windows (en la bandeja)</span>
+        </label>
+      </section>
+
+      <section class="sd-sec" aria-labelledby="sd-reco">
+        <h3 id="sd-reco" class="sd-title">Recomendaciones</h3>
+        <label class="sd-check" title="Para saber el género real de cada canción, Enn consulta Deezer, iTunes y YouTube Music. Solo envía artista y título (o el id de YouTube), sin cuenta">
+          <input type="checkbox" id="set-enrich" checked />
+          <span>Enriquecer con datos en línea (Deezer, iTunes y YouTube Music; solo artista y título)</span>
+        </label>
+        <label class="sd-check" title="La tarjeta que propone qué poner después de la canción que suena">
+          <input type="checkbox" id="set-reco" checked />
+          <span>Proponer qué escuchar después (1.ª escucha y cada 3.ª)</span>
+        </label>
+        <div class="sd-row">
+          <span class="sd-label">Last.fm</span>
+          <input id="set-lastfm" class="sd-input" type="text" autocomplete="off" spellcheck="false" placeholder="Clave de la API (opcional)" aria-label="Clave de la API de Last.fm" title="Opcional: con una clave gratuita de last.fm/api, las etiquetas son más finas (uso no comercial)" />
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">Etiquetas</span>
+          <span id="enrich-status" class="dl-target"></span>
+          <button id="btn-enrich-now" class="btn small" type="button">Buscar ahora</button>
+        </div>
+      </section>
+
+      <section class="sd-sec" aria-labelledby="sd-dl">
+        <h3 id="sd-dl" class="sd-title">Descargas</h3>
+        <div class="sd-row">
+          <span class="sd-label">Carpeta</span>
+          <span id="dl-target" class="dl-target"></span>
+          <button id="btn-dl-dir" class="btn small" type="button" title="Cambiar carpeta de descarga"><svg class="ic" aria-hidden="true"><use href="#i-folder-open" /></svg><span>Cambiar</span></button>
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">Formato</span>
+          <select id="dl-fmt" title="Formato de destino">
+            <option value="m4a">M4A · mejor calidad</option>
+            <option value="mp3">MP3</option>
+            <option value="flac">FLAC sin pérdida</option>
+          </select>
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">A la vez</span>
+          <select id="set-dl-parallel" aria-label="Descargas a la vez" title="Cuántas canciones se descargan a la vez">
+            <option value="0">Automático (3)</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">Velocidad</span>
+          <select id="set-dl-rate" aria-label="Limitar la velocidad de descarga" title="Para no ocupar toda la conexión">
+            <option value="0">Sin límite</option>
+            <option value="1024">Hasta 1 MB/s</option>
+            <option value="2048">Hasta 2 MB/s</option>
+            <option value="5120">Hasta 5 MB/s</option>
+            <option value="10240">Hasta 10 MB/s</option>
+          </select>
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">Descargador</span>
+          <span id="dl-tool-ver" class="dl-target" title="yt-dlp se actualiza solo una vez por semana (y si una descarga falla porque YouTube cambió), comprobando su suma SHA-256"></span>
+          <button id="btn-dl-tool" class="btn small" type="button">Buscar actualización</button>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
   <script src="app.js" type="module"></script>
 </body>
 </html>

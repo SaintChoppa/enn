@@ -4,19 +4,27 @@
   "version": "0.1.0",
   "identifier": "com.enn.player",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "../ui",
+    "beforeDevCommand": {
+      "script": "npm run build:css",
+      "wait": true
+    },
+    "beforeBuildCommand": "npm run build:css"
   },
   "app": {
     "withGlobalTauri": true,
     "windows": [
       {
         "title": "Enn",
-        "width": 1120,
-        "height": 680,
+        "width": 1366,
+        "height": 768,
         "minWidth": 430,
         "minHeight": 90,
         "center": true,
-        "resizable": true
+        "resizable": true,
+        "decorations": false,
+        "shadow": true,
+        "backgroundColor": "#09090b"
       }
     ],
     "security": {
@@ -25,8 +33,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "externalBin": ["binaries/yt-dlp", "binaries/ffmpeg"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
+    "targets": [
+      "nsis"
+    ],
+    "externalBin": [
+      "binaries/yt-dlp",
+      "binaries/ffmpeg"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ]
   }
 }

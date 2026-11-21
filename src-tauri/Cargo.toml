@@ -19,6 +19,15 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 2
 
+# Versión que se instala (Sprint 1, T4): binario más pequeño y algo más rápido.
+# Sin `panic = "abort"`: el motor usa `catch_unwind` para que un pánico en el
+# hilo de audio no tumbe la app.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
@@ -28,9 +37,11 @@ serde_json = "1"
 crossbeam-channel = "0.5"
 symphonia = { version = "=0.5.5", default-features = false, features = ["aac", "adpcm", "aiff", "alac", "caf", "flac", "isomp4", "mkv", "mp1", "mp2", "mp3", "ogg", "pcm", "vorbis", "wav"] }
 cpal = "0.15"
-# WASAPI exclusivo (A1) con el crate de bindings de Microsoft
-[target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant"] }
+# Una sola instancia: abrir Enn otra vez enfoca la que ya está abierta
+# (Sprint 1, T4). Sin esto había dos motores, dos bandejas y dos descargadores.
+tauri-plugin-single-instance = "2"
+# «Abrir con Windows» (opcional, apagado por defecto)
+tauri-plugin-autostart = "2"
 # Controles multimedia del sistema: SMTC en Windows, MPRIS en Linux.
 souvlaki = "0.8"
 # Para obtener el HWND de la ventana (requisito de SMTC en Windows).
@@ -43,3 +54,15 @@ lofty = "0.22"
 # archivo se decodifica/etiqueta de forma independiente, sin estado
 # compartido, así que es un candidato limpio para par_iter.
 rayon = "1"
+# Buscador del descargador (ADR #112): peticiones a YouTube Music. Cliente
+# HTTP pequeño y síncrono (se usa desde un hilo de bloqueo), TLS con rustls.
+ureq = { version = "2.12", default-features = false, features = ["tls", "json"] }
+# Suma SHA-256 de la versión nueva de yt-dlp antes de usarla (Sprint 2, T5).
+sha2 = "0.10"
+
+# WASAPI exclusivo (A1) con el crate de bindings de Microsoft. Va al final a
+# propósito: antes la cabecera de esta sección estaba en medio y todo lo que
+# venía detrás (souvlaki, lofty, rayon, ureq…) quedaba solo para Windows, así
+# que en Linux y macOS no compilaba (Sprint 1, T4).
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_System_Threading", "Win32_System_Power"] }

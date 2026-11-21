@@ -161,6 +161,22 @@ pub fn open(
 
                 let render: IAudioRenderClient = client.GetService().map_err(|e| e.to_string())?;
                 let buffer_frames = client.GetBufferSize().map_err(|e| e.to_string())?;
+                // el motor DEBE saber a qué tasa y con cuántos canales abrió de
+                // verdad el dispositivo: antes nunca se le decía, así que
+                // seguía remuestreando a la tasa del stream anterior y la pista
+                // sonaba desafinada y a otra velocidad (p. ej. 44,1 kHz
+                // remuestreado a 48 kHz y reproducido a 44,1 kHz). También
+                // redimensiona la línea de retardo del visualizador.
+                if let Ok(mut c) = core.lock() {
+                    c.set_output_format(fmt.rate, fmt.channels);
+                }
+                // medición (T1): periodo esperado = periodo del dispositivo
+                // (unidades de 100 ns → µs); el búfer se abrió con esa duración
+                let perf_period_us = (def_period.max(0) as u64) / 10;
+                crate::perf::audio_gap_reset();
+                // la misma prioridad que cpal da a su hilo de audio: el trabajo
+                // de fondo en paralelo (Sprint 1, T7) nunca debe adelantarle
+                crate::jobs::raise_audio_thread();
                 client.Start().map_err(|e| e.to_string())?;
                 let _ = ok_tx.send(Ok(()));
 
@@ -181,12 +197,17 @@ pub fn open(
                     let Ok(padding) = client.GetCurrentPadding() else {
                         break;
                     };
-                    let avail = buffer_frames - padding;
+                    // `padding` puede superar el tamaño del búfer en un
+                    // dispositivo raro: resta saturada en vez de underflow
+                    // (que en debug sería un pánico dentro del hilo del stream)
+                    let avail = buffer_frames.saturating_sub(padding);
                     if avail == 0 {
                         std::thread::sleep(Duration::from_millis(1));
                         continue;
                     }
                     std::thread::sleep(Duration::from_micros(500));
+                    // medición (T1): una «llamada» = rellenar y entregar un búfer
+                    let perf_t0 = crate::perf::audio_cb_begin();
                     let p = match render.GetBuffer(avail) {
                         Ok(p) => p,
                         Err(_) => break,
@@ -195,7 +216,9 @@ pub fn open(
                         break;
                     }
                     let n_units = avail as usize * fmt.channels as usize;
-                    if let Ok(mut c) = core.lock() {
+                    let filled = if let Ok(mut c) = core.lock() {
+                        // la muestra más nueva sonará cuando se vacíe el búfer entero
+                        c.dev_latency_s = buffer_frames as f32 / fmt.rate.max(1) as f32;
                         if fmt.float {
                             c.render_into::<f32>(std::slice::from_raw_parts_mut(
                                 p as *mut f32,
@@ -212,10 +235,19 @@ pub fn open(
                                 n_units,
                             ));
                         }
-                    }
-                    if render.ReleaseBuffer(avail, 0).is_err() {
+                        true
+                    } else {
+                        false
+                    };
+                    // Si el motor no se pudo bloquear, el búfer quedó sin
+                    // rellenar: se devuelve marcado como silencio
+                    // (AUDCLNT_BUFFERFLAGS_SILENT) en vez de reproducir lo que
+                    // hubiera quedado dentro de él.
+                    let flags = if filled { 0 } else { 0x2 };
+                    if render.ReleaseBuffer(avail, flags).is_err() {
                         break;
                     }
+                    crate::perf::audio_cb_end(perf_t0, perf_period_us);
                 }
                 let _ = client.Stop();
                 if stopped_by_caller {

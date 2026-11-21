@@ -9,7 +9,7 @@ A lightweight, high-fidelity music player for Windows, written in Rust with a na
 Most players force a trade-off: commercial catalog apps are heavy and phone home; audiophile players demand a steep setup. Enn takes a deliberate middle path:
 
 - **Very low resource usage** — a real-time engine in Rust, a framework-free UI, no background services.
-- **Broad format support** — MP3, FLAC, WAV, AIFF, OGG/Vorbis, Opus, M4A/AAC via [Symphonia](https://github.com/pdeljanov/Symphonia).
+- **Broad format support** — MP3, FLAC, WAV, AIFF, OGG/Vorbis, M4A/AAC via [Symphonia](https://github.com/pdeljanov/Symphonia).
 - **Serious audio quality** — 32-bit float pipeline, polyphase resampler, 10-band EQ, ReplayGain 2.0 loudness normalization.
 - **Instant to use** — add a folder, click a song, it plays.
 

@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::decode::{self, Tags};
@@ -24,6 +23,33 @@ pub struct Track {
     /// año de lanzamiento/grabación (None si el archivo no lo declara)
     #[serde(default)]
     pub year: Option<u32>,
+    /// fecha de modificación del archivo (segundos Unix) para ordenar
+    /// «Todas las pistas» por lo más reciente; las bibliotecas guardadas antes
+    /// no la traen y se rellena al listar (`fill_mtimes`)
+    #[serde(default)]
+    pub mtime: Option<u64>,
+    /// id de YouTube (descargas): clave estable de la canción para el
+    /// almacén de escuchas aunque el archivo se mueva (Sprint 3)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub yt_id: Option<String>,
+}
+
+/// Segundos Unix de la última modificación de `path` (None si no se puede leer).
+pub fn file_mtime(path: &str) -> Option<u64> {
+    std::fs::metadata(path)
+        .ok()?
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs())
+}
+
+/// Rellena la fecha de las pistas que no la tienen (una sola vez por pista).
+pub fn fill_mtimes(tracks: &mut [Track]) {
+    for t in tracks.iter_mut().filter(|t| t.mtime.is_none()) {
+        t.mtime = file_mtime(&t.path);
+    }
 }
 
 fn tag_or(t: &Option<String>, fallback: &str) -> String {
@@ -50,6 +76,7 @@ pub fn probe(path: &Path) -> Option<Track> {
         album,
         genre,
         year,
+        yt_id,
     } = opened.tags;
     let _ = dec;
     Some(Track {
@@ -62,6 +89,8 @@ pub fn probe(path: &Path) -> Option<Track> {
         favorite: false,
         genre: tag_or(&genre, ""),
         year,
+        mtime: file_mtime(&path.to_string_lossy()),
+        yt_id,
     })
 }
 
@@ -81,15 +110,29 @@ pub struct AddResult {
 
 impl Library {
     pub fn load(path: &Path) -> Self {
-        std::fs::read_to_string(path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+        let Ok(s) = std::fs::read_to_string(path) else {
+            return Self::default(); // primer uso: no hay archivo
+        };
+        match serde_json::from_str(&s) {
+            Ok(lib) => lib,
+            Err(e) => {
+                // Sprint 1 (T4): antes se seguía con una biblioteca vacía y el
+                // siguiente guardado sobrescribía el archivo dañado → se perdía
+                // la biblioteca. Ahora se aparta para poder recuperarla.
+                let moved = crate::fsutil::quarantine(path);
+                crate::player::log_error(&format!(
+                    "library.json no se pudo leer ({e}); apartado en {moved:?}"
+                ));
+                Self::default()
+            }
+        }
     }
 
     pub fn save(&self, path: &Path) {
         if let Ok(s) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(path, s);
+            if let Err(e) = crate::fsutil::write_atomic(path, s.as_bytes()) {
+                crate::player::log_error(&format!("no se pudo guardar la biblioteca: {e}"));
+            }
         }
     }
 
@@ -111,13 +154,10 @@ impl Library {
         // benefician de escanear en paralelo en vez de uno por uno; collect()
         // sobre un Vec conserva el orden original pese al paralelismo, así
         // que "primer error" sigue significando lo mismo que antes.
-        let probed: Vec<(PathBuf, Option<Track>)> = candidates
-            .into_par_iter()
-            .map(|f| {
-                let t = probe(&f);
-                (f, t)
-            })
-            .collect();
+        // en el grupo de fondo de Enn (Sprint 1, T7): mismos núcleos, prioridad
+        // baja y un solo hilo con batería
+        let probed: Vec<(PathBuf, Option<Track>)> =
+            crate::jobs::map(&candidates, |f| (f.clone(), probe(f)));
         let mut res = AddResult::default();
         let mut fresh: Vec<Track> = Vec::new();
         for (f, t) in probed {
@@ -205,7 +245,7 @@ pub struct ProbeMany {
 }
 
 pub fn probe_many(paths: &[PathBuf]) -> ProbeMany {
-    let probed: Vec<Option<Track>> = paths.par_iter().map(|p| probe(p)).collect();
+    let probed: Vec<Option<Track>> = crate::jobs::map(paths, |p| probe(p));
     let mut out = ProbeMany {
         tracks: Vec::new(),
         failed: 0,

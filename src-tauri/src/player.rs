@@ -127,7 +127,29 @@ pub enum EngineCmd {
         gain_db: f32,
     },
     Seek(f64),
+    /// Vista previa de Descargas (Sprint 2): suena por una tercera vía, sin
+    /// ecualizar; la canción en curso baja en 200 ms y queda en pausa hasta
+    /// que acaba.
+    PreviewStart {
+        dec: Decoder,
+        dur: Option<f64>,
+        gain_db: f32,
+    },
+    /// Apaga la vista previa con un fundido corto; la canción vuelve sola.
+    PreviewStop,
 }
+
+/// Bajada de la canción al empezar una vista previa.
+const DUCK_DOWN_S: f64 = 0.20;
+/// Vuelta de la canción al acabar la vista previa.
+const DUCK_UP_S: f64 = 0.30;
+/// Entrada y salida de la vista previa.
+const PV_IN_S: f64 = 0.25;
+const PV_OUT_S: f64 = 0.60;
+/// Apagado al cortarla (otra vista previa, ⏹ o ▶/⏸).
+const PV_STOP_S: f64 = 0.15;
+/// Tubería de la vista previa (0 = canción, 1 = preparada para el crossfade).
+const PV_PIPE: usize = 2;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PlayState {
@@ -147,7 +169,13 @@ pub struct CurrentTrack {
     pub ended: bool,
     pub pos_sec: f64,
     pub gain_lin: f32,
+    /// Ganancia a la que se acerca `gain_lin` poco a poco (normalización que
+    /// llega a mitad de canción): sin saltos audibles (2026-11-12).
+    pub gain_target: f32,
     pub fade_secs: f32,
+    /// tasa de bits media aproximada (tamaño en disco ÷ duración), calculada
+    /// UNA vez al cargar la pista para no repetir `fs::metadata` en cada sondeo
+    pub bitrate_kbps: Option<u32>,
 }
 
 pub struct Core {
@@ -162,24 +190,63 @@ pub struct Core {
     pub out_channels: u16,
     cmds: VecDeque<EngineCmd>,
     /// Tublería de remuestreo por pista: índice 0 = cur, 1 = next.
-    resamplers: [dsp::Resampler; 2],
+    resamplers: [dsp::Resampler; 3],
     scratch: Vec<f32>,
     /// búfer de mezcla de la pista preparada (crossfade)
     scratch2: Vec<f32>,
-    inbufs: [Vec<f32>; 2],
+    inbufs: [Vec<f32>; 3],
     /// Muestras estéreo ya leídas del decodificador pero aún no consumidas por el remuestreador.
-    carries: [Vec<f32>; 2],
+    carries: [Vec<f32>; 3],
     /// Frame de archivo donde empieza `carries[pipe]` (base del segmento).
-    seg_bases: [u64; 2],
+    seg_bases: [u64; 3],
+    /// Vista previa sonando (tubería 2) y la que espera a que se apague la
+    /// anterior (cruce de 150 ms entre pastillas).
+    pub preview: Option<CurrentTrack>,
+    pub preview_next: Option<(Decoder, Option<f64>, f32)>,
+    /// Envolvente de apagado de la vista previa (1 = entera, 0 = apagada).
+    pv_env: f32,
+    pv_stopping: bool,
+    /// Ganancia de la canción mientras la tapa una vista previa (1 = normal).
+    duck: f32,
+    /// La canción sonaba y la pausó la vista previa: vuelve sola al acabar.
+    held: bool,
+    /// búfer de mezcla de la vista previa
+    scratch3: Vec<f32>,
+    /// Aviso pendiente para la interfaz: empezó (`true`) o acabó (`false`)
+    /// una vista previa. Aparte de `pending_event` para que no se pisen.
+    pub pv_event: Option<bool>,
     /// Segundos de fade de entrada al cambiar de canción (0 = apagado).
     pub fade_secs: f32,
     pub pending_event: Option<&'static str>,
     pub(crate) runtime_error: Option<String>,
     pub renders: u64,
-    /// anillo mono (L+R)/2 para el analizador de espectro (A5)
+    /// anillo mono (L+R)/2 para los analizadores (espectro A5 y
+    /// visualizador). Se llena ANTES de la línea de retardo de salida, así
+    /// que sus muestras más nuevas todavía no suenan: ese adelanto es el
+    /// lookahead del visualizador.
     pub spec_buf: Vec<f32>,
     pub spec_pos: usize,
+    /// reloj de muestras: frames escritos en el anillo desde que existe el motor
+    pub spec_total: u64,
+    /// Línea de retardo estéreo al final de la cadena (ADR #93): retrasa lo
+    /// que va al dispositivo para que el análisis vaya `lookahead_s()` por
+    /// delante de lo que se oye. Es bit-exacta (solo mueve muestras).
+    delay_buf: Vec<f32>,
+    delay_pos: usize,
+    pub delay_frames: usize,
+    delay_set: bool,
+    /// latencia de la muestra más nueva escrita en el dispositivo (s),
+    /// medida en cada callback por el backend de salida
+    pub dev_latency_s: f32,
 }
+
+/// Adelanto objetivo del análisis respecto al audio audible (ADR #87).
+pub const LOOKAHEAD_S: f32 = 0.090;
+/// Retardo mínimo de la línea aunque el dispositivo ya aporte mucha latencia.
+const MIN_DELAY_S: f32 = 0.020;
+/// Capacidad del anillo de análisis: ventana máxima (16384 a 192 kHz) más el
+/// retardo máximo, con margen.
+pub const SPEC_RING: usize = 65536;
 
 impl Core {
     fn new(out_rate: u32, out_channels: u16) -> Self {
@@ -195,18 +262,33 @@ impl Core {
             resamplers: [
                 dsp::Resampler::new(out_rate as f64, out_rate as f64),
                 dsp::Resampler::new(out_rate as f64, out_rate as f64),
+                dsp::Resampler::new(out_rate as f64, out_rate as f64),
             ],
             scratch: Vec::new(),
             scratch2: Vec::new(),
-            inbufs: [Vec::new(), Vec::new()],
-            carries: [Vec::new(), Vec::new()],
-            seg_bases: [0, 0],
+            scratch3: Vec::new(),
+            inbufs: [Vec::new(), Vec::new(), Vec::new()],
+            carries: [Vec::new(), Vec::new(), Vec::new()],
+            seg_bases: [0, 0, 0],
+            preview: None,
+            preview_next: None,
+            pv_env: 1.0,
+            pv_stopping: false,
+            duck: 1.0,
+            held: false,
+            pv_event: None,
             fade_secs: 0.0,
             pending_event: None,
             runtime_error: None,
             renders: 0,
-            spec_buf: vec![0.0; 8192],
+            spec_buf: vec![0.0; SPEC_RING],
             spec_pos: 0,
+            spec_total: 0,
+            delay_buf: Vec::new(),
+            delay_pos: 0,
+            delay_frames: 0,
+            delay_set: false,
+            dev_latency_s: 0.0,
         }
     }
 
@@ -222,7 +304,7 @@ impl Core {
     ) {
         log_msg(&format!(
             "ENGINE {} cmd: {} (dur={dur:?}, sr={})",
-            if pipe == 0 { "play" } else { "prime" },
+            ["play", "prime", "preview"][pipe],
             path.display(),
             dec.sample_rate
         ));
@@ -242,6 +324,14 @@ impl Core {
             });
         let artist = tags.artist.unwrap_or_default();
         dec.served_frames = 0;
+        // tasa de bits media (tamaño en disco / duración) calculada UNA vez al
+        // cargar la pista: antes se recalculaba con `fs::metadata` en cada
+        // sondeo de estado de la UI, cuatro veces por segundo
+        let bitrate_kbps = dur.filter(|d| *d > 0.0).and_then(|d| {
+            let bytes = std::fs::metadata(&path).ok()?.len();
+            Some(((bytes as f64 * 8.0) / d / 1000.0).round() as u32)
+        });
+        let gain = (10f32).powf(gain_db.clamp(-30.0, 30.0) / 20.0);
         let track = CurrentTrack {
             dec,
             path,
@@ -252,13 +342,66 @@ impl Core {
             dur,
             ended: false,
             pos_sec: 0.0,
-            gain_lin: (10f32).powf(gain_db.clamp(-30.0, 30.0) / 20.0),
+            gain_lin: gain,
+            gain_target: gain,
             fade_secs: self.fade_secs.max(0.0),
+            bitrate_kbps,
         };
-        if pipe == 0 {
-            self.cur = Some(track);
-        } else {
-            self.next = Some(track);
+        match pipe {
+            0 => self.cur = Some(track),
+            1 => self.next = Some(track),
+            _ => self.preview = Some(track),
+        }
+    }
+
+    /// Empieza a sonar la vista previa (la tubería 2 debe estar libre).
+    fn start_preview(&mut self, dec: Decoder, dur: Option<f64>, gain_db: f32) {
+        self.load_track(
+            PV_PIPE,
+            dec,
+            PathBuf::from("vista-previa"),
+            Tags::default(),
+            dur,
+            gain_db,
+        );
+        self.pv_env = 1.0;
+        self.pv_stopping = false;
+        self.pv_event = Some(true);
+    }
+
+    /// La canción que pausó la vista previa vuelve a sonar (sube en 300 ms).
+    fn release_hold(&mut self) {
+        if !self.held {
+            return;
+        }
+        self.held = false;
+        if let Some(c) = &mut self.cur {
+            if c.state == PlayState::Paused {
+                c.state = PlayState::Playing;
+                self.duck = 0.0;
+                self.pending_event = Some("state");
+            }
+        }
+    }
+
+    /// ▶/⏸: si hay vista previa se corta y se obedece la orden (si la
+    /// vista previa tenía la canción en pausa, la orden es «que vuelva»).
+    pub fn toggle(&mut self) {
+        if self.preview.is_some() || self.preview_next.is_some() {
+            self.preview_next = None;
+            self.pv_stopping = true;
+            if self.held {
+                self.release_hold();
+                return;
+            }
+        }
+        if let Some(cur) = &mut self.cur {
+            cur.state = match cur.state {
+                PlayState::Playing => PlayState::Paused,
+                PlayState::Paused => PlayState::Playing,
+                PlayState::Idle => PlayState::Idle,
+            };
+            self.pending_event = Some("state");
         }
     }
 
@@ -273,6 +416,14 @@ impl Core {
                     gain_db,
                 } => {
                     self.next = None; // la cola manual siempre gana
+                                      // una canción nueva corta la vista previa en el acto
+                    if self.preview.take().is_some() {
+                        self.pv_event = Some(false);
+                    }
+                    self.preview_next = None;
+                    self.pv_stopping = false;
+                    self.held = false;
+                    self.duck = 1.0;
                     self.load_track(0, dec, path, tags, dur, gain_db);
                     self.pending_event = Some("track");
                 }
@@ -286,6 +437,21 @@ impl Core {
                     // solo si sigue sonando la misma pista para la que se preparó
                     if self.cur.is_some() {
                         self.load_track(1, dec, path, tags, dur, gain_db);
+                    }
+                }
+                EngineCmd::PreviewStart { dec, dur, gain_db } => {
+                    if self.preview.is_some() {
+                        // la anterior se apaga en 150 ms y luego entra esta
+                        self.preview_next = Some((dec, dur, gain_db));
+                        self.pv_stopping = true;
+                    } else {
+                        self.start_preview(dec, dur, gain_db);
+                    }
+                }
+                EngineCmd::PreviewStop => {
+                    self.preview_next = None;
+                    if self.preview.is_some() {
+                        self.pv_stopping = true;
                     }
                 }
                 EngineCmd::Seek(secs) => {
@@ -312,6 +478,59 @@ impl Core {
         }
     }
 
+    /// Formato real del dispositivo recién abierto (compartido o exclusivo).
+    /// Lo debe llamar CADA backend de salida al abrir, antes de que pida
+    /// muestras: el remuestreador, el ecualizador y la línea de retardo
+    /// dependen de esta tasa. Si cambia con pistas ya cargadas, sus
+    /// remuestreadores se rehacen para la tasa nueva (como tras una búsqueda),
+    /// porque si no seguirían convirtiendo a la tasa vieja y la pista sonaría
+    /// desafinada y a otra velocidad.
+    pub fn set_output_format(&mut self, rate: u32, channels: u16) {
+        let rate = rate.max(1);
+        let changed = rate != self.out_rate;
+        self.out_rate = rate;
+        self.out_channels = channels.max(1);
+        self.eq.set_sr(rate as f64);
+        if changed {
+            for pipe in 0..3 {
+                let in_rate = match pipe {
+                    0 => self.cur.as_ref(),
+                    1 => self.next.as_ref(),
+                    _ => self.preview.as_ref(),
+                }
+                .map(|t| t.dec.sample_rate.max(1));
+                if let Some(ir) = in_rate {
+                    self.resamplers[pipe] = dsp::Resampler::new(ir as f64, rate as f64);
+                    self.carries[pipe].clear();
+                    self.seg_bases[pipe] = 0;
+                }
+            }
+        }
+        self.reset_output_delay();
+    }
+
+    /// Olvida la línea de retardo: se vuelve a dimensionar en el siguiente
+    /// callback con la latencia del dispositivo nuevo. Llamar al (re)abrir
+    /// la salida, antes de que empiece a pedir muestras.
+    pub fn reset_output_delay(&mut self) {
+        self.delay_set = false;
+        self.delay_buf.clear();
+        self.delay_pos = 0;
+        self.delay_frames = 0;
+    }
+
+    /// Segundos que van desde la muestra más nueva del anillo de análisis
+    /// hasta que suena: retardo de la línea + latencia del dispositivo.
+    pub fn lookahead_s(&self) -> f32 {
+        self.delay_frames as f32 / self.out_rate.max(1) as f32 + self.dev_latency_s.max(0.0)
+    }
+
+    /// Posición AUDIBLE de una pista: la del decodificador menos lo que aún
+    /// está en la línea de retardo (lo que la UI debe mostrar).
+    pub fn audible_pos(&self, t: &CurrentTrack) -> f64 {
+        (t.pos_sec - self.delay_frames as f64 / self.out_rate.max(1) as f64).max(0.0)
+    }
+
     /// Petición de búsqueda encolada desde fuera del hilo de audio.
     pub fn request_seek(&mut self, secs: f64) {
         self.cmds.push_back(EngineCmd::Seek(secs));
@@ -325,6 +544,22 @@ impl Core {
             return;
         }
         self.renders += 1;
+        if !self.delay_set {
+            // primer callback tras abrir la salida: la latencia del
+            // dispositivo ya está medida, así que la línea completa el resto
+            // hasta LOOKAHEAD_S. Se fija aquí, con la línea vacía, y no se
+            // toca mientras el stream viva (cambiarla en marcha sería un corte).
+            let want = (LOOKAHEAD_S - self.dev_latency_s.max(0.0)).clamp(MIN_DELAY_S, LOOKAHEAD_S);
+            self.delay_frames = (want * self.out_rate.max(1) as f32).round() as usize;
+            self.delay_buf = vec![0.0; self.delay_frames * 2];
+            self.delay_pos = 0;
+            self.delay_set = true;
+            log_msg(&format!(
+                "ENGINE retardo de salida {:.1} ms (latencia del dispositivo {:.1} ms)",
+                want * 1000.0,
+                self.dev_latency_s * 1000.0
+            ));
+        }
         if self.renders <= 3 {
             log_msg(&format!(
                 "ENGINE render #{} (state={:?})",
@@ -350,6 +585,9 @@ impl Core {
         let mut sound = false;
         let mut buf_start = 0.0;
         let mut gain_lin = 1.0f32;
+        // ganancia al final del bloque: entre una y otra se interpola muestra
+        // a muestra, así un cambio de normalización se desliza (~0,5 s)
+        let mut gain_end = 1.0f32;
         let mut fade_secs = 0.0f32;
         let mut cur_dur: Option<f64> = None;
         if let Some(t) = &mut cur {
@@ -357,9 +595,11 @@ impl Core {
                 sound = true;
                 buf_start = t.pos_sec;
                 gain_lin = t.gain_lin;
+                gain_end = glide_gain(t.gain_lin, t.gain_target, frames, or);
+                t.gain_lin = gain_end;
                 fade_secs = t.fade_secs;
                 cur_dur = t.dur;
-                render_pull(self, 0, t, &mut scr[..frames * 2], frames);
+                render_pull(self, 0, t, &mut scr[..frames * 2], frames, true);
             }
         }
         // ¿ventana de crossfade? queda menos fade+buffer de pista y hay preparada
@@ -370,7 +610,7 @@ impl Core {
                 .unwrap_or(false);
         if xfade {
             if let Some(n) = next.as_mut() {
-                render_pull(self, 1, n, &mut scr2[..frames * 2], frames);
+                render_pull(self, 1, n, &mut scr2[..frames * 2], frames, true);
             }
         }
         if !sound {
@@ -380,7 +620,6 @@ impl Core {
         } else if xfade {
             // mezcla equal-power (potencia constante): sqrt(x) y sqrt(1-x)
             // evitan la caída de sonoridad perceptible de la mezcla lineal
-            let g_cur = gain_lin;
             let g_next = next.as_ref().map(|n| n.gain_lin).unwrap_or(1.0);
             let fs = fade_secs as f64;
             let end = cur_dur.unwrap_or(0.0);
@@ -389,6 +628,7 @@ impl Core {
                 let x = ((end - t) / fs).clamp(0.0, 1.0) as f32;
                 let w = x.sqrt();
                 let wn = (1.0f32 - x).sqrt();
+                let g_cur = gain_lin + (gain_end - gain_lin) * (f as f32 / frames as f32);
                 scr[f * 2] = scr[f * 2] * w * g_cur + scr2[f * 2] * wn * g_next;
                 scr[f * 2 + 1] = scr[f * 2 + 1] * w * g_cur + scr2[f * 2 + 1] * wn * g_next;
             }
@@ -400,9 +640,9 @@ impl Core {
                 (fs, Some(d)) if fs > 0.0 => buf_start > d - fs as f64,
                 _ => false,
             };
-            if gain_lin != 1.0 || near_start || near_end {
+            if gain_lin != 1.0 || gain_end != 1.0 || near_start || near_end {
                 for f in 0..frames {
-                    let mut g = gain_lin;
+                    let mut g = gain_lin + (gain_end - gain_lin) * (f as f32 / frames as f32);
                     if fade_secs > 0.0 {
                         let t = buf_start + f as f64 / or;
                         let fs = fade_secs as f64;
@@ -442,6 +682,39 @@ impl Core {
         }
         self.cur = cur;
         self.next = next;
+        self.mix_preview(&mut scr[..frames * 2], frames, sound);
+
+        // alimentar el anillo de análisis con la señal SIN retrasar (mono,
+        // barato): sus muestras van `lookahead_s()` por delante del altavoz
+        {
+            let ring_len = self.spec_buf.len();
+            let n = frames.min(ring_len);
+            for i in 0..n {
+                let v = (scr[i * 2] + scr[i * 2 + 1]) * 0.5;
+                self.spec_buf[(self.spec_pos + i) % ring_len] = v;
+            }
+            self.spec_pos = (self.spec_pos + n) % ring_len;
+            self.spec_total += n as u64;
+        }
+        // línea de retardo: entra lo recién renderizado, sale lo de hace
+        // `delay_frames`. Volumen y balance se aplican DESPUÉS, así que
+        // responden al instante.
+        let d = self.delay_frames;
+        if d > 0 && self.delay_buf.len() == d * 2 {
+            let mut k = self.delay_pos;
+            for f in 0..frames {
+                let (l, r) = (self.delay_buf[k * 2], self.delay_buf[k * 2 + 1]);
+                self.delay_buf[k * 2] = scr[f * 2];
+                self.delay_buf[k * 2 + 1] = scr[f * 2 + 1];
+                scr[f * 2] = l;
+                scr[f * 2 + 1] = r;
+                k += 1;
+                if k == d {
+                    k = 0;
+                }
+            }
+            self.delay_pos = k;
+        }
 
         let gl = 1.0 - self.balance.max(0.0);
         let gr = 1.0 + self.balance.min(0.0);
@@ -460,18 +733,92 @@ impl Core {
             };
             *out = T::from_audio((s * m).clamp(-1.0, 1.0));
         }
-        // alimentar el anillo del analizador de espectro (mono, barato)
-        {
-            let ring_len = self.spec_buf.len();
-            let n = frames.min(ring_len);
-            for i in 0..n {
-                let v = (scr[i * 2] + scr[i * 2 + 1]) * 0.5;
-                self.spec_buf[(self.spec_pos + i) % ring_len] = v;
-            }
-            self.spec_pos = (self.spec_pos + n) % ring_len;
-        }
         self.scratch = scr;
         self.scratch2 = scr2;
+    }
+
+    /// Vista previa (Sprint 2): baja la canción hacia 0 (y la pausa al
+    /// llegar) mientras suena una vista previa, la sube al acabar, y suma
+    /// la vista previa con su envolvente a `scr`.
+    fn mix_preview(&mut self, scr: &mut [f32], frames: usize, sound: bool) {
+        let or = self.out_rate.max(1) as f64;
+        let target = if self.preview.is_some() && !self.pv_stopping {
+            0.0f32
+        } else {
+            1.0
+        };
+        if sound && (self.duck != 1.0 || target != 1.0) {
+            let step = if target < self.duck {
+                -(1.0 / (DUCK_DOWN_S * or)) as f32
+            } else {
+                (1.0 / (DUCK_UP_S * or)) as f32
+            };
+            for f in 0..frames {
+                self.duck = if step < 0.0 {
+                    (self.duck + step).max(target)
+                } else {
+                    (self.duck + step).min(target)
+                };
+                scr[f * 2] *= self.duck;
+                scr[f * 2 + 1] *= self.duck;
+            }
+            if target == 0.0 && self.duck == 0.0 {
+                if let Some(c) = &mut self.cur {
+                    if c.state == PlayState::Playing {
+                        c.state = PlayState::Paused;
+                        self.held = true;
+                        self.pending_event = Some("state");
+                    }
+                }
+            }
+        } else if !sound && target == 1.0 {
+            self.duck = 1.0;
+        }
+
+        let Some(mut pv) = self.preview.take() else {
+            return;
+        };
+        let mut buf = std::mem::take(&mut self.scratch3);
+        if buf.len() < frames * 2 {
+            buf.resize(frames * 2, 0.0);
+        }
+        let start = pv.pos_sec;
+        render_pull(
+            self,
+            PV_PIPE,
+            &mut pv,
+            &mut buf[..frames * 2],
+            frames,
+            false,
+        );
+        let stop_step = (1.0 / (PV_STOP_S * or)) as f32;
+        for f in 0..frames {
+            let t = start + f as f64 / or;
+            let mut g = pv.gain_lin * ((t / PV_IN_S).min(1.0) as f32);
+            if let Some(d) = pv.dur {
+                g *= ((d - t).max(0.0) / PV_OUT_S).min(1.0) as f32;
+            }
+            if self.pv_stopping {
+                self.pv_env = (self.pv_env - stop_step).max(0.0);
+            }
+            g *= self.pv_env;
+            scr[f * 2] += buf[f * 2] * g;
+            scr[f * 2 + 1] += buf[f * 2 + 1] * g;
+        }
+        self.scratch3 = buf;
+        let finished = pv.state == PlayState::Idle || self.pv_env <= 0.0;
+        if !finished {
+            self.preview = Some(pv);
+            return;
+        }
+        if let Some((dec, dur, gain_db)) = self.preview_next.take() {
+            self.start_preview(dec, dur, gain_db);
+        } else {
+            self.pv_stopping = false;
+            self.pv_env = 1.0;
+            self.release_hold();
+            self.pv_event = Some(false);
+        }
     }
 }
 
@@ -484,6 +831,7 @@ fn render_pull(
     cur: &mut CurrentTrack,
     out: &mut [f32],
     frames: usize,
+    eq: bool,
 ) {
     let ratio = core.resamplers[pipe].ratio;
     let mut produced = 0usize;
@@ -516,11 +864,14 @@ fn render_pull(
         };
         let total = have + got;
         if total == 0 {
-            // fin de archivo real
+            // fin de archivo real (solo la canción en curso avisa «ended»: si
+            // no, el fin de una vista previa saltaría a la siguiente canción)
             if !cur.ended {
                 cur.ended = true;
                 cur.state = PlayState::Idle;
-                core.pending_event = Some("ended");
+                if pipe == 0 {
+                    core.pending_event = Some("ended");
+                }
             }
             for s in out.iter_mut().skip(produced * 2) {
                 *s = 0.0;
@@ -577,7 +928,16 @@ fn render_pull(
         }
     }
 
-    // ecualizador + tono sobre la salida ya remuestreada
+    // ecualizador + tono sobre la salida ya remuestreada (la vista previa no
+    // pasa: el EQ guarda estado por señal y dos a la vez darían chasquidos)
+    if !eq {
+        if produced < frames {
+            for s in out.iter_mut().skip(produced * 2) {
+                *s = 0.0;
+            }
+        }
+        return;
+    }
     core.eq.sync_gains();
     let done = out[..produced * 2].len();
     for f in 0..produced {
@@ -608,6 +968,13 @@ pub struct Player {
     pub exclusive: Mutex<bool>,
     /// tasa nativa de la pista en curso para reabrir el stream (Hi-Res, A3)
     pub desired_rate: Mutex<Option<u32>>,
+    /// Dispositivo (por nombre; `None` = predeterminado) en el que la salida
+    /// exclusiva ya falló esta sesión. Mientras sea el mismo no se vuelve a
+    /// probar: con FxSound la prueba recorre todos los formatos y falla, y se
+    /// repetía en cada cambio de tasa entre canciones (Sprint 1, T4).
+    excl_failed_for: Mutex<Option<String>>,
+    /// archivo donde se recuerda entre sesiones (lo fija `set_exclusive_memory`)
+    excl_mem_path: Mutex<Option<std::path::PathBuf>>,
     /// avisado por el hilo del stream cuando el dispositivo de audio falla en
     /// caliente (auriculares Bluetooth que se apagan, USB desenchufado…);
     /// el supervisor arrancado en `start()` reconecta solo con reintentos.
@@ -616,6 +983,16 @@ pub struct Player {
 }
 
 /// Devuelve los nombres de los dispositivos de salida disponibles.
+/// Nombre real del dispositivo de salida: el elegido, o el predeterminado de
+/// Windows si no hay ninguno elegido.
+fn resolved_output_name(want: &Option<String>) -> Option<String> {
+    if let Some(n) = want {
+        return Some(n.clone());
+    }
+    use cpal::traits::{DeviceTrait, HostTrait};
+    cpal::default_host().default_output_device()?.name().ok()
+}
+
 pub fn list_output_devices() -> Vec<String> {
     use cpal::traits::{DeviceTrait, HostTrait};
     let host = cpal::default_host();
@@ -704,10 +1081,26 @@ fn audio_owner(
             let err_tx2 = err_tx.clone();
             dev.build_output_stream(
                 &cfg,
-                move |data: &mut [$ty], _| {
+                move |data: &mut [$ty], info: &cpal::OutputCallbackInfo| {
+                    // medición (T1): solo atómicos, sin reservar ni loguear
+                    let perf_t0 = crate::perf::audio_cb_begin();
+                    let mut perf_period_us = 0u64;
                     if let Ok(mut c) = c1.lock() {
+                        // latencia de la muestra MÁS NUEVA de este búfer: lo
+                        // que tarda en empezar a sonar + lo que dura el búfer
+                        let ts = info.timestamp();
+                        let start = ts
+                            .playback
+                            .duration_since(&ts.callback)
+                            .map(|d| d.as_secs_f32())
+                            .unwrap_or(0.02);
+                        let frames = data.len() / c.out_channels.max(1) as usize;
+                        c.dev_latency_s = start + frames as f32 / c.out_rate.max(1) as f32;
+                        // periodo esperado = lo que dura este búfer
+                        perf_period_us = frames as u64 * 1_000_000 / c.out_rate.max(1) as u64;
                         c.render_into(data);
                     }
+                    crate::perf::audio_cb_end(perf_t0, perf_period_us);
                 },
                 move |e| {
                     let m = format!("error del stream de audio: {e}");
@@ -748,11 +1141,11 @@ fn audio_owner(
 
     {
         let mut c = core.lock().unwrap();
-        c.out_rate = rate;
-        c.out_channels = channels;
-        c.eq.set_sr(rate as f64);
+        c.set_output_format(rate, channels);
     }
     log_msg("audio_owner: iniciando reproducción (play)");
+    // medición (T1): el hueco hasta la primera llamada no es un corte
+    crate::perf::audio_gap_reset();
     if let Err(e) = stream.play() {
         let m = format!("no se pudo iniciar la reproducción en «{dev_name}»: {e}");
         log_error(&m);
@@ -779,6 +1172,8 @@ impl Player {
             media_stop: Mutex::new(None),
             exclusive: Mutex::new(false),
             desired_rate: Mutex::new(None),
+            excl_failed_for: Mutex::new(None),
+            excl_mem_path: Mutex::new(None),
             device_err_tx,
             device_err_rx: Mutex::new(Some(device_err_rx)),
         }
@@ -794,6 +1189,8 @@ impl Player {
         if prev == on {
             return Ok(());
         }
+        // cambiar el ajuste vuelve a dar una oportunidad a la exclusiva
+        self.forget_exclusive_failure();
         self.streams.lock().unwrap().take();
         if self.core.lock().unwrap().cur.is_some() {
             self.ensure_streams()?;
@@ -803,6 +1200,56 @@ impl Player {
 
     pub fn exclusive_on(&self) -> bool {
         *self.exclusive.lock().unwrap()
+    }
+
+    /// La exclusiva ya falló esta sesión en el dispositivo elegido ahora.
+    fn exclusive_known_bad(&self) -> bool {
+        let bad = self.excl_failed_for.lock().unwrap().clone();
+        match bad {
+            Some(b) => {
+                resolved_output_name(&self.device_name.lock().unwrap().clone()).as_deref()
+                    == Some(b.as_str())
+            }
+            None => false,
+        }
+    }
+
+    /// Recuerda (también entre sesiones) que la exclusiva falló en `dev_setting`.
+    /// Se guarda el NOMBRE REAL del dispositivo: si el predeterminado de
+    /// Windows cambia (otro altavoz, se desinstala FxSound…), se vuelve a probar.
+    fn remember_exclusive_failure(&self, dev_setting: &Option<String>) {
+        let Some(name) = resolved_output_name(dev_setting) else {
+            return;
+        };
+        *self.excl_failed_for.lock().unwrap() = Some(name.clone());
+        if let Some(path) = self.excl_mem_path.lock().unwrap().clone() {
+            let body = serde_json::json!({ "bad": name, "version": env!("CARGO_PKG_VERSION") });
+            let _ = crate::fsutil::write_atomic(&path, body.to_string().as_bytes());
+        }
+    }
+
+    fn forget_exclusive_failure(&self) {
+        *self.excl_failed_for.lock().unwrap() = None;
+        if let Some(path) = self.excl_mem_path.lock().unwrap().clone() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    /// Carga la memoria de «exclusiva no admitida» de la sesión anterior
+    /// (Sprint 1, T4). Con FxSound la prueba fallida retrasaba cada primer ▶
+    /// ~1 s. Una versión nueva de Enn vuelve a probar.
+    pub fn set_exclusive_memory(&self, path: std::path::PathBuf) {
+        let saved = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+        if let Some(v) = saved {
+            if v["version"] == env!("CARGO_PKG_VERSION") {
+                if let Some(b) = v["bad"].as_str() {
+                    *self.excl_failed_for.lock().unwrap() = Some(b.to_string());
+                }
+            }
+        }
+        *self.excl_mem_path.lock().unwrap() = Some(path);
     }
 
     pub fn start(&self) {
@@ -829,6 +1276,8 @@ impl Player {
             let mut want = self.device_name.lock().unwrap();
             *want = name.filter(|n| !n.trim().is_empty());
         }
+        // dispositivo nuevo: la exclusiva se vuelve a probar
+        self.forget_exclusive_failure();
         // Cierra el stream actual (el hilo dueño termina al soltar el sender).
         self.streams.lock().unwrap().take();
         self.ensure_streams()
@@ -845,7 +1294,8 @@ impl Player {
         // dispositivo no acepta formatos exclusivos, recae en compartido.
         // Solo existe en Windows (WASAPI); en otras plataformas cae directo
         // a la salida compartida de abajo (cpal), sin intentar abrir nada.
-        if self.exclusive_on() {
+        let dev_now = self.device_name.lock().unwrap().clone();
+        if self.exclusive_on() && !self.exclusive_known_bad() {
             #[cfg(target_os = "windows")]
             {
                 let want_rate = self.desired_rate.lock().unwrap().unwrap_or(48000);
@@ -861,10 +1311,17 @@ impl Player {
                 match ok_rx.recv_timeout(Duration::from_secs(12)) {
                     Ok(Ok(())) => {
                         *guard = Some(kill_tx);
+                        crate::perf::mark("audio-listo");
                         return Ok(());
                     }
-                    Ok(Err(e)) => log_warn(&format!("exclusiva no disponible, compartida: {e}")),
-                    Err(_) => log_warn("exclusiva sin respuesta, compartida"),
+                    Ok(Err(e)) => {
+                        log_warn(&format!("exclusiva no disponible, compartida: {e}"));
+                        self.remember_exclusive_failure(&dev_now);
+                    }
+                    Err(_) => {
+                        log_warn("exclusiva sin respuesta, compartida");
+                        self.remember_exclusive_failure(&dev_now);
+                    }
                 }
             }
             #[cfg(not(target_os = "windows"))]
@@ -896,7 +1353,12 @@ impl Player {
         });
         *guard = Some(kill_tx);
         match ok_rx.recv_timeout(Duration::from_secs(30)) {
-            Ok(r) => r,
+            Ok(r) => {
+                if r.is_ok() {
+                    crate::perf::mark("audio-listo");
+                }
+                r
+            }
             Err(_) => {
                 let m = "el dispositivo de audio no respondió a tiempo".to_string();
                 log_error(&m);
@@ -919,11 +1381,24 @@ impl Player {
     ) -> Result<(), String> {
         let (dec, opened) = Decoder::open(path).map_err(|e| e.to_string())?;
         // en exclusiva, el stream debe abrirse a la tasa nativa del archivo:
-        // si cambió respecto a la pista anterior, se reabre el dispositivo
-        if self.exclusive_on() {
-            let mut want = self.desired_rate.lock().unwrap();
-            if *want != Some(dec.sample_rate) {
-                *want = Some(dec.sample_rate);
+        // si cambió respecto a la pista anterior, se reabre el dispositivo.
+        // Si la exclusiva ya falló en este dispositivo, se está en compartida
+        // (que remuestrea): reabrir solo costaría un corte y otra prueba fallida.
+        if self.exclusive_on() && !self.exclusive_known_bad() {
+            // El cerrojo de `desired_rate` se suelta ANTES de tocar `streams`:
+            // `ensure_streams` los toma en el orden contrario (streams →
+            // desired_rate), así que mantener ambos a la vez abría un
+            // interbloqueo con el supervisor de reconexión en caliente.
+            let rate_changed = {
+                let mut want = self.desired_rate.lock().unwrap();
+                if *want == Some(dec.sample_rate) {
+                    false
+                } else {
+                    *want = Some(dec.sample_rate);
+                    true
+                }
+            };
+            if rate_changed {
                 self.streams.lock().unwrap().take();
             }
         }
@@ -963,6 +1438,23 @@ impl Player {
         Ok(())
     }
 
+    /// Vista previa de Descargas: abre el clip y lo manda al motor, que baja
+    /// y pausa la canción en curso (Sprint 2, T2).
+    pub fn preview_start(&self, path: &Path, gain_db: f32) -> Result<(), String> {
+        let (dec, opened) = Decoder::open(path).map_err(|e| e.to_string())?;
+        self.ensure_streams()?;
+        self.push(EngineCmd::PreviewStart {
+            dec,
+            dur: duration_of(&opened),
+            gain_db,
+        });
+        Ok(())
+    }
+
+    pub fn preview_stop(&self) {
+        self.push(EngineCmd::PreviewStop);
+    }
+
     pub fn set_fade(&self, secs: f32) {
         if let Ok(mut c) = self.core.lock() {
             c.fade_secs = secs.clamp(0.0, 15.0);
@@ -973,27 +1465,22 @@ impl Player {
     pub fn set_current_gain_db(&self, gain_db: f32) {
         if let Ok(mut c) = self.core.lock() {
             if let Some(cur) = &mut c.cur {
-                cur.gain_lin = (10f32).powf(gain_db.clamp(-30.0, 30.0) / 20.0);
+                cur.gain_target = (10f32).powf(gain_db.clamp(-30.0, 30.0) / 20.0);
             }
         }
     }
 
     pub fn toggle(&self) {
         if let Ok(mut c) = self.core.lock() {
-            if let Some(cur) = &mut c.cur {
-                cur.state = match cur.state {
-                    PlayState::Playing => PlayState::Paused,
-                    PlayState::Paused => PlayState::Playing,
-                    PlayState::Idle => PlayState::Idle,
-                };
-                c.pending_event = Some("state");
-            }
+            c.toggle();
         }
     }
 
     pub fn stop(&self) {
         if let Ok(mut c) = self.core.lock() {
             c.cur = None;
+            c.held = false;
+            c.cmds.push_back(EngineCmd::PreviewStop);
             c.pending_event = Some("stop");
         }
     }
@@ -1064,6 +1551,16 @@ fn device_supervisor(app: tauri::AppHandle, err_rx: Receiver<()>) {
         while err_rx.try_recv().is_ok() {}
         let p = app.state::<Player>();
         if p.core.lock().unwrap().cur.is_none() {
+            // Bug 2026-11-13: si el dispositivo caía sin nada sonando (p. ej.
+            // FxSound reiniciándose), aquí se seguía de largo y el stream
+            // muerto se quedaba puesto: `play_path` lo daba por bueno, mandaba
+            // la orden a un hilo de audio que ya no existía y no sonaba
+            // ninguna canción hasta reiniciar la app. Se suelta, y la próxima
+            // canción reabre el dispositivo.
+            log_warn(
+                "audio: el dispositivo de salida falló sin nada sonando; se reabrirá al reproducir",
+            );
+            p.streams.lock().unwrap().take();
             continue;
         }
         log_warn("audio: el dispositivo de salida falló en caliente, intentando reconectar…");
@@ -1099,24 +1596,35 @@ fn reporter_loop(app: tauri::AppHandle, core: Arc<Mutex<Core>>, rx: Receiver<()>
         if rx.recv_timeout(Duration::from_millis(200)).is_ok() {
             return;
         }
-        let (event, err, st) = {
+        let (event, pv_event, err, st) = {
             let mut c = match core.lock() {
                 Ok(c) => c,
                 Err(_) => continue,
             };
             let event = c.pending_event.take();
+            let pv_event = c.pv_event.take();
             let err = c.runtime_error.take();
             let st = Status {
                 state: c.cur.as_ref().map(|t| t.state).unwrap_or(PlayState::Idle),
                 path: c.cur.as_ref().map(|t| t.path.clone()),
                 title: c.cur.as_ref().map(|t| t.title.clone()).unwrap_or_default(),
                 artist: c.cur.as_ref().map(|t| t.artist.clone()).unwrap_or_default(),
-                pos: c.cur.as_ref().map(|t| t.pos_sec).unwrap_or(0.0),
+                pos: c.cur.as_ref().map(|t| c.audible_pos(t)).unwrap_or(0.0),
                 dur: c.cur.as_ref().and_then(|t| t.dur),
             };
-            (event, err, st)
+            (event, pv_event, err, st)
         };
         let json = status_json(&st);
+        // el error del motor se emite SIEMPRE: antes se quedaba por el camino
+        // cuando coincidía con un evento, porque el `continue` de abajo se lo
+        // comía (ya se había sacado del Core con `take()`)
+        if let Some(e) = err {
+            let _ = app.emit("enn://error", e);
+        }
+        // la interfaz enseña el anillo de la vista previa con esto
+        if let Some(on) = pv_event {
+            let _ = app.emit("enn://preview", on);
+        }
         if let Some(e) = event {
             let _ = app.emit("enn://status", json.clone());
             if e == "ended" {
@@ -1125,26 +1633,54 @@ fn reporter_loop(app: tauri::AppHandle, core: Arc<Mutex<Core>>, rx: Receiver<()>
             last_tick = std::time::Instant::now();
             continue;
         }
-        if let Some(e) = err {
-            let _ = app.emit("enn://error", e);
-        }
-        if last_tick.elapsed() >= Duration::from_millis(500) {
+        // la posición solo cambia sonando: en pausa o sin pista no se emite nada
+        // (antes, 2 avisos por segundo despertaban la interfaz para nada)
+        if st.state == PlayState::Playing && last_tick.elapsed() >= Duration::from_millis(500) {
             let _ = app.emit("enn://tick", json);
             last_tick = std::time::Instant::now();
         }
     }
 }
 
+/// Acerca la ganancia `from` a `target` durante un bloque de `frames` muestras
+/// a `rate` Hz: aproximación exponencial con τ = 0,15 s (queda asentada en
+/// ~0,6 s). Se ajusta exacta al llegar muy cerca para no arrastrar decimales.
+fn glide_gain(from: f32, target: f32, frames: usize, rate: f64) -> f32 {
+    if (from - target).abs() < 1e-4 {
+        return target;
+    }
+    let k = (-(frames as f64) / (0.15 * rate.max(1.0))).exp() as f32;
+    target + (from - target) * k
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// La normalización que cambia a mitad de canción se desliza, no salta.
+    #[test]
+    fn gain_glides_without_jumps() {
+        let rate = 48_000.0;
+        let mut g = 1.0f32;
+        // primer bloque de 10 ms: apenas se mueve
+        g = glide_gain(g, 0.25, 480, rate);
+        assert!(g > 0.9, "g={g}");
+        // al cabo de ~0,6 s queda asentada en el destino
+        for _ in 0..60 {
+            g = glide_gain(g, 0.25, 480, rate);
+        }
+        assert!((g - 0.25).abs() < 0.02, "g={g}");
+        assert_eq!(glide_gain(0.5, 0.5, 480, rate), 0.5);
+    }
     use std::io::Write;
 
     /// WAV PCM16 estéreo con seno a `freq` Hz (para pruebas de crossfade).
     fn write_sine_wav(path: &Path, seconds: u32, freq: f32) {
         let sr: u32 = 48000;
         let mut f = std::fs::File::create(path).unwrap();
-        let bytes: u32 = sr * 2 * seconds;
+        // estéreo de 16 bits = 4 bytes por frame (antes ponía 2 y la cabecera
+        // declaraba la mitad: un «2 s» duraba 1 s)
+        let bytes: u32 = sr * 4 * seconds;
         f.write_all(b"RIFF").unwrap();
         f.write_all(&(36 + bytes).to_le_bytes()).unwrap();
         f.write_all(b"WAVEfmt ").unwrap();
@@ -1233,6 +1769,94 @@ mod tests {
         let _ = std::fs::remove_file(&wb);
     }
 
+    /// ADR #93: el anillo de análisis va `lookahead_s()` por delante de lo
+    /// que sale al dispositivo, y la línea de retardo es bit-exacta.
+    #[test]
+    fn output_delay_gives_the_analyzer_a_lookahead() {
+        let wa = std::env::temp_dir().join("enn-delay.wav");
+        write_sine_wav(&wa, 1, 1000.0);
+        let core = Arc::new(Mutex::new(Core::new(48000, 2)));
+        {
+            let (dec, opened) = crate::decode::Decoder::open(&wa).expect("abrir wav");
+            let dur = duration_of(&opened);
+            let mut c = core.lock().unwrap();
+            c.dev_latency_s = 0.030; // como si el dispositivo aportara 30 ms
+            c.cmds.push_back(EngineCmd::Play {
+                dec,
+                path: wa.clone(),
+                tags: Default::default(),
+                dur,
+                gain_db: 0.0,
+            });
+        }
+        let mut out = Vec::new();
+        let mut buf = vec![0.0f32; 480 * 2];
+        for _ in 0..30 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+            out.extend_from_slice(&buf);
+        }
+        let c = core.lock().unwrap();
+        // 90 ms − 30 ms del dispositivo = 60 ms de línea
+        assert_eq!(c.delay_frames, 2880);
+        assert!((c.lookahead_s() - 0.090).abs() < 1e-4);
+        // la salida es silencio exacto durante el retardo y luego suena
+        assert!(out[..2880 * 2].iter().all(|&s| s == 0.0));
+        assert!(out[2880 * 2..2880 * 2 + 200]
+            .iter()
+            .any(|&s| s.abs() > 0.01));
+        // el anillo vio la señal desde la primera muestra
+        assert_eq!(c.spec_total, 30 * 480);
+        // y la posición audible descuenta lo que sigue en la línea
+        let t = c.cur.as_ref().unwrap();
+        assert!((t.pos_sec - c.audible_pos(t) - 0.060).abs() < 1e-6);
+        drop(c);
+        let _ = std::fs::remove_file(&wa);
+    }
+
+    /// Bug del 2026-11-09: el modo exclusivo abría el dispositivo a la tasa
+    /// del archivo sin avisar al motor, que seguía remuestreando a la vieja.
+    /// `set_output_format` debe rehacer el remuestreador de la pista en curso.
+    #[test]
+    fn output_format_change_retunes_the_loaded_track() {
+        let wa = std::env::temp_dir().join("enn-rate.wav");
+        write_sine_wav(&wa, 2, 440.0); // 48 kHz
+        let core = Arc::new(Mutex::new(Core::new(48000, 2)));
+        {
+            let (dec, opened) = crate::decode::Decoder::open(&wa).expect("abrir wav");
+            let dur = duration_of(&opened);
+            let mut c = core.lock().unwrap();
+            c.cmds.push_back(EngineCmd::Play {
+                dec,
+                path: wa.clone(),
+                tags: Default::default(),
+                dur,
+                gain_db: 0.0,
+            });
+        }
+        let mut buf = vec![0.0f32; 480 * 2];
+        core.lock().unwrap().render_into::<f32>(&mut buf);
+        assert!((core.lock().unwrap().resamplers[0].ratio - 1.0).abs() < 1e-9);
+
+        // el dispositivo se reabre a 96 kHz (exclusivo a la tasa nativa de otro archivo)
+        core.lock().unwrap().set_output_format(96000, 2);
+        let mut c = core.lock().unwrap();
+        assert_eq!(c.out_rate, 96000);
+        assert!((c.resamplers[0].ratio - 0.5).abs() < 1e-9, "48 k → 96 k");
+        // 0,1 s de salida a 96 kHz = 0,1 s de pista, no 0,2 s
+        let before = c.cur.as_ref().unwrap().pos_sec;
+        let mut buf = vec![0.0f32; 9600 * 2];
+        c.render_into::<f32>(&mut buf);
+        let advanced = c.cur.as_ref().unwrap().pos_sec - before;
+        assert!((advanced - 0.1).abs() < 0.002, "avanzó {advanced} s");
+        // la línea de retardo se redimensiona para la tasa nueva
+        assert_eq!(
+            c.delay_frames,
+            (c.lookahead_s().min(0.09) * 96000.0).round() as usize
+        );
+        drop(c);
+        let _ = std::fs::remove_file(&wa);
+    }
+
     fn write_silence_wav(path: &Path, seconds: u32) {
         use std::io::Write;
         let sr: u32 = 44100;
@@ -1300,7 +1924,8 @@ mod tests {
 
     #[test]
     fn audio_smoke() {
-        let wav = std::env::temp_dir().join("enn-selftest.wav");
+        // archivo propio: `decode_drain` corre a la vez y reescribía el mismo
+        let wav = std::env::temp_dir().join("enn-smoke.wav");
         write_silence_wav(&wav, 8);
 
         let core = Arc::new(Mutex::new(Core::new(48000, 2)));
@@ -1396,5 +2021,203 @@ mod tests {
         );
         assert!(st.2, "eof debería ser true");
         assert!((st.1 - 4.0).abs() < 0.1, "pos final extraña: {}", st.1);
+    }
+
+    // ------------------------------------------------ vista previa (Sprint 2, T2)
+
+    fn play_cmd(path: &Path) -> EngineCmd {
+        let (dec, opened) = crate::decode::Decoder::open(path).expect("abrir wav");
+        EngineCmd::Play {
+            dec,
+            path: path.to_path_buf(),
+            tags: Default::default(),
+            dur: duration_of(&opened),
+            gain_db: 0.0,
+        }
+    }
+
+    fn preview_cmd(path: &Path) -> EngineCmd {
+        let (dec, opened) = crate::decode::Decoder::open(path).expect("abrir wav");
+        EngineCmd::PreviewStart {
+            dec,
+            dur: duration_of(&opened),
+            gain_db: -4.0,
+        }
+    }
+
+    /// Renderiza `n` bloques de 10 ms; devuelve el pico de cada bloque y los
+    /// avisos que fue dejando el motor.
+    fn render_blocks(core: &mut Core, n: usize) -> (Vec<f32>, Vec<&'static str>) {
+        let mut buf = vec![0.0f32; 480 * 2];
+        let mut peaks = Vec::with_capacity(n);
+        let mut events = Vec::new();
+        for _ in 0..n {
+            core.render_into::<f32>(&mut buf);
+            peaks.push(buf.iter().fold(0.0f32, |m, s| m.max(s.abs())));
+            if let Some(e) = core.pending_event.take() {
+                events.push(e);
+            }
+        }
+        (peaks, events)
+    }
+
+    fn tmp_wav(name: &str, secs: u32, freq: f32) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("enn-pv-{name}-{}.wav", std::process::id()));
+        write_sine_wav(&p, secs, freq);
+        p
+    }
+
+    #[test]
+    fn preview_ducks_and_pauses_the_song_then_resumes_it_where_it_was() {
+        let song = tmp_wav("song", 6, 440.0);
+        let clip = tmp_wav("clip", 1, 880.0);
+        let mut core = Core::new(48000, 2);
+        core.cmds.push_back(play_cmd(&song));
+        render_blocks(&mut core, 100); // 1 s de canción
+        core.cmds.push_back(preview_cmd(&clip));
+        // a los 300 ms la canción ya bajó (200 ms) y está en pausa
+        let (_, ev) = render_blocks(&mut core, 30);
+        let held_at = {
+            let t = core.cur.as_ref().unwrap();
+            assert_eq!(
+                t.state,
+                PlayState::Paused,
+                "la canción debe quedar en pausa"
+            );
+            t.pos_sec
+        };
+        assert!(core.preview.is_some(), "suena la vista previa");
+        assert!(!ev.contains(&"ended"));
+        // la pausa llegó tras ~200 ms de bajada, no de golpe
+        assert!(held_at > 1.15 && held_at < 1.3, "pausa en {held_at}");
+        // la vista previa (1 s) termina y la canción vuelve sola
+        let (_, ev) = render_blocks(&mut core, 120);
+        assert!(core.preview.is_none(), "la vista previa terminó");
+        assert!(
+            !ev.contains(&"ended"),
+            "el fin de la vista previa no es el fin de la canción"
+        );
+        let t = core.cur.as_ref().unwrap();
+        assert_eq!(t.state, PlayState::Playing, "la canción vuelve a sonar");
+        // retomó donde estaba: avanzó solo lo que lleva sonando desde que volvió
+        assert!(
+            t.pos_sec > held_at && t.pos_sec < held_at + 0.6,
+            "pos {}",
+            t.pos_sec
+        );
+        let _ = std::fs::remove_file(&song);
+        let _ = std::fs::remove_file(&clip);
+    }
+
+    #[test]
+    fn preview_fades_in_and_out() {
+        let clip = tmp_wav("fade", 2, 880.0);
+        let mut core = Core::new(48000, 2);
+        core.cmds.push_back(preview_cmd(&clip));
+        let (peaks, _) = render_blocks(&mut core, 220);
+        // la salida va 60–90 ms retrasada: se busca el primer bloque con sonido
+        let on = peaks.iter().position(|&p| p > 0.0).expect("sonó");
+        // entrada de 250 ms: el primer bloque es mucho más bajo que el pleno
+        let full = peaks[on + 60];
+        assert!(full > 0.2, "pleno {full}");
+        assert!(peaks[on] < full * 0.2, "entrada {} vs {full}", peaks[on]);
+        // salida de 600 ms: 300 ms antes del final suena a media potencia o menos
+        let end = peaks.iter().rposition(|&p| p > 1e-4).expect("acaba");
+        assert!(peaks[end - 30] < full * 0.7, "salida {}", peaks[end - 30]);
+        assert!(core.preview.is_none());
+        let _ = std::fs::remove_file(&clip);
+    }
+
+    #[test]
+    fn without_music_the_preview_ends_in_silence() {
+        let clip = tmp_wav("alone", 1, 880.0);
+        let mut core = Core::new(48000, 2);
+        core.cmds.push_back(preview_cmd(&clip));
+        let (_, ev) = render_blocks(&mut core, 150);
+        assert!(core.preview.is_none() && core.cur.is_none());
+        assert!(!ev.contains(&"ended"));
+        let (peaks, _) = render_blocks(&mut core, 20);
+        assert!(peaks.iter().all(|&p| p == 0.0), "queda en silencio");
+        let _ = std::fs::remove_file(&clip);
+    }
+
+    #[test]
+    fn a_paused_song_stays_paused_after_the_preview() {
+        let song = tmp_wav("paused", 4, 440.0);
+        let clip = tmp_wav("clip2", 1, 880.0);
+        let mut core = Core::new(48000, 2);
+        core.cmds.push_back(play_cmd(&song));
+        render_blocks(&mut core, 50);
+        core.toggle(); // el usuario la pausó antes
+        core.cmds.push_back(preview_cmd(&clip));
+        render_blocks(&mut core, 150);
+        assert!(core.preview.is_none());
+        assert_eq!(core.cur.as_ref().unwrap().state, PlayState::Paused);
+        let _ = std::fs::remove_file(&song);
+        let _ = std::fs::remove_file(&clip);
+    }
+
+    #[test]
+    fn two_previews_in_a_row_leave_only_the_last_one() {
+        let song = tmp_wav("song2", 8, 440.0);
+        let a = tmp_wav("a", 3, 660.0);
+        let b = tmp_wav("b", 1, 990.0);
+        let mut core = Core::new(48000, 2);
+        core.cmds.push_back(play_cmd(&song));
+        render_blocks(&mut core, 50);
+        core.cmds.push_back(preview_cmd(&a));
+        render_blocks(&mut core, 40);
+        core.cmds.push_back(preview_cmd(&b));
+        // cruce: la primera se apaga (150 ms) y entra la segunda
+        render_blocks(&mut core, 30);
+        assert!(core.preview.is_some());
+        assert_eq!(core.cur.as_ref().unwrap().state, PlayState::Paused);
+        // la segunda dura 1 s: a los 1,3 s ya no queda ninguna y vuelve la canción
+        render_blocks(&mut core, 130);
+        assert!(core.preview.is_none() && core.preview_next.is_none());
+        assert_eq!(core.cur.as_ref().unwrap().state, PlayState::Playing);
+        for p in [&song, &a, &b] {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+
+    #[test]
+    fn stop_and_play_pause_end_the_preview() {
+        let song = tmp_wav("song3", 6, 440.0);
+        let clip = tmp_wav("long", 5, 880.0);
+        let mut core = Core::new(48000, 2);
+        core.cmds.push_back(play_cmd(&song));
+        render_blocks(&mut core, 50);
+        core.cmds.push_back(preview_cmd(&clip));
+        render_blocks(&mut core, 40);
+        // PreviewStop: se apaga con fundido y vuelve la canción
+        core.cmds.push_back(EngineCmd::PreviewStop);
+        render_blocks(&mut core, 30);
+        assert!(core.preview.is_none());
+        assert_eq!(core.cur.as_ref().unwrap().state, PlayState::Playing);
+        // ▶/⏸ durante la vista previa: se corta y se obedece (vuelve a sonar)
+        core.cmds.push_back(preview_cmd(&clip));
+        render_blocks(&mut core, 40);
+        core.toggle();
+        render_blocks(&mut core, 30);
+        assert!(core.preview.is_none());
+        assert_eq!(core.cur.as_ref().unwrap().state, PlayState::Playing);
+        let _ = std::fs::remove_file(&song);
+        let _ = std::fs::remove_file(&clip);
+    }
+
+    #[test]
+    fn playing_a_new_song_ends_the_preview_at_once() {
+        let song = tmp_wav("song4", 4, 440.0);
+        let clip = tmp_wav("clip4", 5, 880.0);
+        let mut core = Core::new(48000, 2);
+        core.cmds.push_back(preview_cmd(&clip));
+        render_blocks(&mut core, 30);
+        core.cmds.push_back(play_cmd(&song));
+        render_blocks(&mut core, 30);
+        assert!(core.preview.is_none());
+        assert_eq!(core.cur.as_ref().unwrap().state, PlayState::Playing);
+        let _ = std::fs::remove_file(&song);
+        let _ = std::fs::remove_file(&clip);
     }
 }

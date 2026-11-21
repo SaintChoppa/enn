@@ -159,16 +159,39 @@ pub fn cached_cover_url(art_dir: &Path, track_path: &Path) -> Option<String> {
         std::fs::write(&dest, &art.bytes).ok()?;
         let _ = prune(art_dir);
     }
-    let url = dest.to_string_lossy().replace('\\', "/");
-    Some(format!("file:///{url}"))
+    // Ojo con la forma exacta: souvlaki (Windows) hace
+    // `url.trim_start_matches("file://")` y pasa el resto tal cual a
+    // `StorageFile::GetFileFromPathAsync`, que EXIGE separadores nativos (`\`)
+    // y rechaza las barras normales con 0x800700A1 (ERROR_BAD_PATHNAME):
+    // comprobado llamando a la API con las dos formas (2026-10-03). Por eso se
+    // pasa la ruta nativa sin convertirla: en Windows queda `file://C:\…`, cuyo
+    // recorte es una ruta válida, y en Unix la ruta ya usa `/`, así que el
+    // resultado sigue siendo un `file:///…` correcto.
+    let path = dest.to_string_lossy();
+    Some(format!("file://{path}"))
 }
 
 /// Borra entradas huérfanas si la caché supera las ~1500 imágenes.
 fn prune(art_dir: &Path) -> Result<(), std::io::Error> {
     const MAX: usize = 1500;
+    // La poda recorre el directorio entero (read_dir + sort), así que no se
+    // hace en cada escritura: un escaneo grande escribe miles de carátulas
+    // seguidas y cada una costaba O(n) sobre toda la caché.
+    const EVERY: usize = 128;
+    static WRITES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    if WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < EVERY {
+        return Ok(());
+    }
+    WRITES.store(0, std::sync::atomic::Ordering::Relaxed);
     let mut files: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
     for e in std::fs::read_dir(art_dir)?.flatten() {
         let p = e.path();
+        // Los `.peaks` de waveform (240 bytes cada uno) no entran en el tope
+        // de imágenes: si compitieran, una portada nueva desalojaría una onda
+        // ya calculada y habría que recalcularla al volver a esa pista.
+        if p.extension().and_then(|x| x.to_str()) == Some("peaks") {
+            continue;
+        }
         if p.is_file() {
             let mt = e
                 .metadata()

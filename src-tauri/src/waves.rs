@@ -58,7 +58,8 @@ pub fn get_or_spawn(app: &tauri::AppHandle, track_path: &Path) -> Option<Vec<u8>
     let app = app.clone();
     let track = track_path.to_path_buf();
     let pf2 = pf.clone();
-    std::thread::spawn(move || {
+    // en el grupo de fondo (Sprint 1, T7): antes, un hilo nuevo por pista
+    crate::jobs::spawn(move || {
         let peaks = compute(&track);
         if let Some(p) = peaks {
             let _ = std::fs::write(&pf2, &p);

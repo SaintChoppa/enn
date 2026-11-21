@@ -245,7 +245,22 @@ pub fn fft_magnitudes(input: &[f32], out: &mut [f32]) {
         })
         .collect();
     let mut im = vec![0.0f64; n];
+    fft_in_place(&mut re, &mut im);
 
+    let half = n / 2;
+    let count = half.min(out.len());
+    for (o, i) in out.iter_mut().zip(0..count) {
+        *o = ((re[i] * re[i] + im[i] * im[i]).sqrt() / (half as f64)) as f32;
+    }
+}
+
+/// FFT radix-2 iterativa en el sitio (Cooley-Tukey, decimación en el tiempo).
+/// `re` e `im` deben tener la misma longitud, potencia de dos; si no, no hace nada.
+pub fn fft_in_place(re: &mut [f64], im: &mut [f64]) {
+    let n = re.len();
+    if n == 0 || n & (n - 1) != 0 || im.len() != n {
+        return;
+    }
     // reordenación bit-reversal
     let mut j = 0usize;
     for i in 0..n {
@@ -286,13 +301,8 @@ pub fn fft_magnitudes(input: &[f32], out: &mut [f32]) {
         }
         len <<= 1;
     }
-
-    let half = n / 2;
-    let count = half.min(out.len());
-    for (o, i) in out.iter_mut().zip(0..count) {
-        *o = ((re[i] * re[i] + im[i] * im[i]).sqrt() / (half as f64)) as f32;
-    }
 }
+
 /// Remuestreador polifásico en streaming (estéreo): sinc con ventana Blackman,
 /// 64 taps y 256 fases precalculadas. Calidad muy superior al lineal (sin las
 /// imágenes que produce interpolar a saco) con coste de CPU despreciable.
