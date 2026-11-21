@@ -1655,15 +1655,18 @@ mod tests {
 
     #[test]
     fn a_rate_limit_holds_the_queue_until_the_wait_is_over() {
-        let s: Sched<u32> = Sched::new(3, Duration::from_millis(120));
+        // márgenes amplios: en las máquinas de la CI (macOS) una espera de
+        // 60 ms llegó a durar más que la pausa de 120 ms y la prueba fallaba
+        // sin que el planificador hiciera nada mal
+        let s: Sched<u32> = Sched::new(3, Duration::from_millis(500));
         s.push(1);
         s.push(2);
         assert_eq!(s.take_timeout(Duration::from_millis(10)), Some(1));
         s.finish(Outcome::RateLimited);
         let t = Instant::now();
-        assert_eq!(s.take_timeout(Duration::from_millis(60)), None, "esperando");
-        assert_eq!(s.take_timeout(Duration::from_millis(500)), Some(2));
-        assert!(t.elapsed() >= Duration::from_millis(110));
+        assert_eq!(s.take_timeout(Duration::from_millis(50)), None, "esperando");
+        assert_eq!(s.take_timeout(Duration::from_millis(3000)), Some(2));
+        assert!(t.elapsed() >= Duration::from_millis(480), "{:?}", t.elapsed());
     }
 
     #[test]
