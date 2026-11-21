@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>Enn · Cinta</title>
+<style>
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("./fonts/inter-400-latin.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url("./fonts/inter-500-latin.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("./fonts/inter-600-latin.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap; src: url("./fonts/inter-700-latin.woff2") format("woff2"); }
+html, body { margin: 0; background: #09090b; color: #e8eaee; }
+body { font-family: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }
+a { color: #bcc6d4; text-decoration: none; }
+a:hover { color: #e8eaee; }
+::selection { background: rgba(188,198,212,.28); }
+input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 20px; cursor: pointer; margin: 0; }
+input[type="range"]::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: rgba(255,255,255,.12); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #bcc6d4; margin-top: -4px; border: none; }
+input[type="range"]::-moz-range-track { height: 5px; border-radius: 3px; background: rgba(255,255,255,.12); }
+input[type="range"]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #bcc6d4; border: none; }
+button:focus-visible, input:focus-visible, a:focus-visible, label:focus-visible { outline: 2px solid #bcc6d4; outline-offset: 2px; }
+</style>
+</helmet>
+<div style="background:#09090b; color:#e8eaee; font-family:'Inter','Segoe UI Variable','Segoe UI',system-ui,sans-serif; font-size:14px;">
+
+<section data-screen-label="Visualizador" ref="{{ stageRef }}" onPointerMove="{{ onStageMove }}" onDragOver="{{ onDragOver }}" onDrop="{{ onDrop }}" style="position:relative; height:100vh; min-height:620px; overflow:hidden; background:#09090b; cursor:{{ stageCursor }};">
+  <canvas ref="{{ canvasRef }}" aria-label="Cinta metálica sobre una lemniscata" style="position:absolute; inset:0; width:100%; height:100%; display:block;"></canvas>
+
+  <sc-if value="{{ glFail }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; inset:0; display:grid; place-items:center; color:#99a0aa; font-size:13px;">Este navegador no ofrece WebGL2 (el prototipo necesita gl_VertexID).</div>
+  </sc-if>
+
+  <div style="position:absolute; top:20px; left:24px; display:flex; align-items:center; gap:14px; opacity:{{ chromeOpacity }}; transition:opacity 200ms cubic-bezier(0.23,1,0.32,1);">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="width:20px; height:20px; fill:none; stroke:#bcc6d4; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round;"><path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"></path></svg>
+      <span style="font-size:13px; font-weight:600; letter-spacing:0.24em; text-transform:uppercase; color:#e8eaee;">Enn</span>
+    </div>
+    <span style="width:1px; height:14px; background:rgba(255,255,255,.14);"></span>
+    <span style="font-size:12px; color:#99a0aa;">Cinta · referencia de render</span>
+    <a href="#handoff" style="font-size:12px; color:#6b7079;" style-hover="color:#e8eaee">Handoff para wgpu ↓</a>
+  </div>
+
+  <div style="position:absolute; left:24px; bottom:24px; display:flex; flex-direction:column; gap:12px; opacity:{{ chromeOpacity }}; transition:opacity 200ms cubic-bezier(0.23,1,0.32,1);">
+    <p style="margin:0; display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#6b7079;">
+      <i ref="{{ dotRef }}" style="display:block; width:6px; height:6px; border-radius:50%; background:#6b7079;"></i>
+      <span ref="{{ stateRef }}">En reposo</span>
+    </p>
+    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <button type="button" onClick="{{ togglePlay }}" aria-label="{{ playLabel }}" style="width:44px; height:44px; flex:none; border-radius:50%; border:0; background:#bcc6d4; color:#0b0b0e; display:grid; place-items:center; cursor:pointer; transition:transform 160ms cubic-bezier(0.23,1,0.32,1), filter 120ms ease;" style-hover="filter:brightness(1.08)" style-active="transform:scale(0.97)">
+        <sc-if value="{{ playing }}" hint-placeholder-val="{{ false }}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round;"><line x1="7" y1="4" x2="7" y2="20"></line><line x1="17" y1="4" x2="17" y2="20"></line></svg>
+        </sc-if>
+        <sc-if value="{{ notPlaying }}" hint-placeholder-val="{{ true }}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:19px; height:19px;"><polygon points="7 5 19 12 7 19 7 5" fill="currentColor" stroke="none"></polygon></svg>
+        </sc-if>
+      </button>
+      <div style="display:flex; flex-direction:column; gap:3px; min-width:0; max-width:300px;">
+        <span style="font-size:14px; font-weight:600; color:#e8eaee; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ sourceTitle }}</span>
+        <span style="font-size:11.5px; color:#99a0aa;">{{ sourceSub }}</span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <label style="display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border:1px solid rgba(255,255,255,.08); border-radius:8px; background:#0e0e12; color:#e8eaee; font-size:12px; cursor:pointer; transition:transform 160ms cubic-bezier(0.23,1,0.32,1), background-color 120ms ease;" style-hover="background:#16161a" style-active="transform:scale(0.97)">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round;"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.2 10H20a2 2 0 0 1 1.9 2.5l-1.5 6a2 2 0 0 1-2 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H18a2 2 0 0 1 2 2v2"></path></svg>
+          <span>Cargar audio</span>
+          <input type="file" accept="audio/*" onChange="{{ onFile }}" style="display:none;">
+        </label>
+        <sc-if value="{{ isFile }}" hint-placeholder-val="{{ false }}">
+          <button type="button" onClick="{{ backToSynth }}" style="height:26px; padding:0 10px; border:1px solid transparent; border-radius:8px; background:transparent; color:#99a0aa; font:inherit; font-size:12px; cursor:pointer;" style-hover="color:#e8eaee">Prueba sintética</button>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ panelClosed }}" hint-placeholder-val="{{ false }}">
+    <button type="button" onClick="{{ openPanel }}" style="position:absolute; top:16px; right:16px; height:32px; padding:0 12px 0 8px; display:flex; align-items:center; gap:6px; border:1px solid rgba(255,255,255,.08); border-radius:8px; background:#16161a; color:#e8eaee; font:inherit; font-size:12px; cursor:pointer; opacity:{{ chromeOpacity }}; transition:opacity 200ms cubic-bezier(0.23,1,0.32,1);">
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; transform:rotate(90deg);"><path d="m6 9 6 6 6-6"></path></svg>
+      <span>Ajustes</span>
+    </button>
+  </sc-if>
+
+  <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ true }}">
+    <aside onPointerEnter="{{ panelEnter }}" onPointerLeave="{{ panelLeave }}" style="position:absolute; top:16px; right:16px; width:320px; max-width:calc(100% - 32px); max-height:calc(100% - 32px); overflow-y:auto; background:#16161a; border:1px solid rgba(255,255,255,.08); border-radius:12px; box-shadow:0 10px 34px rgba(0,0,0,.55); opacity:{{ chromeOpacity }}; pointer-events:{{ chromePE }}; transition:opacity 200ms cubic-bezier(0.23,1,0.32,1); scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.12) transparent;">
+
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 8px 10px 16px; border-bottom:1px solid rgba(255,255,255,.08);">
+        <span style="font-size:10.5px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#6b7079;">Visualizador</span>
+        <button type="button" onClick="{{ closePanel }}" aria-label="Ocultar el panel" style="width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:8px; background:transparent; color:#99a0aa; cursor:pointer;" style-hover="background:rgba(255,255,255,.07); color:#e8eaee">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round;"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
+      </div>
+
+      <div style="padding:14px 16px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid rgba(255,255,255,.08);">
+        <div style="display:flex; align-items:baseline; justify-content:space-between;">
+          <span style="font-size:12px; font-weight:600; color:#e8eaee;">Paleta</span>
+          <span style="font-size:11px; color:#6b7079; font-variant-numeric:tabular-nums;">{{ countLabel }}</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:6px;">
+          <sc-for list="{{ swatches }}" as="sw" hint-placeholder-count="4">
+            <div style="display:flex; flex-direction:column; gap:4px; min-width:0;">
+              <label style="position:relative; display:block; height:34px; border-radius:8px; background:{{ sw.hex }}; box-shadow:inset 0 0 0 1px rgba(255,255,255,.10); cursor:pointer; overflow:hidden;">
+                <input type="color" value="{{ sw.hex }}" onChange="{{ sw.onChange }}" aria-label="{{ sw.label }}" style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:0; padding:0;">
+              </label>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:2px; height:14px;">
+                <span style="font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:10px; color:#99a0aa;">{{ sw.short }}</span>
+                <sc-if value="{{ sw.canRemove }}" hint-placeholder-val="{{ true }}">
+                  <button type="button" onClick="{{ sw.remove }}" aria-label="{{ sw.removeLabel }}" style="width:14px; height:14px; padding:0; border:0; background:transparent; color:#6b7079; display:grid; place-items:center; cursor:pointer;" style-hover="color:#e8eaee">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style="width:10px; height:10px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round;"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                  </button>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ canAdd }}" hint-placeholder-val="{{ true }}">
+            <button type="button" onClick="{{ addSwatch }}" aria-label="Añadir color" style="height:34px; border-radius:8px; border:1px dashed rgba(255,255,255,.16); background:transparent; color:#6b7079; font:inherit; font-size:16px; cursor:pointer;" style-hover="color:#e8eaee; border-color:rgba(255,255,255,.3)">+</button>
+          </sc-if>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <div style="height:6px; border-radius:3px; background:{{ gradientCss }};"></div>
+          <div style="display:flex; justify-content:space-between; font-size:10.5px; color:#6b7079;"><span>cabeza</span><span>cola · interpolado en OKLab</span></div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <sc-for list="{{ presets }}" as="pr" hint-placeholder-count="4">
+            <button type="button" onClick="{{ pr.apply }}" style="height:24px; padding:0 10px; border-radius:6px; border:1px solid {{ pr.border }}; background:{{ pr.bg }}; color:{{ pr.color }}; font:inherit; font-size:11.5px; cursor:pointer; transition:transform 160ms cubic-bezier(0.23,1,0.32,1);" style-active="transform:scale(0.97)">{{ pr.name }}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="padding:14px 16px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid rgba(255,255,255,.08);">
+        <div style="display:flex; align-items:baseline; justify-content:space-between;">
+          <span style="font-size:12px; font-weight:600; color:#e8eaee;">Perfil de reacción</span>
+          <span style="font-size:11px; color:#6b7079;">{{ editedLabel }}</span>
+        </div>
+        <div role="radiogroup" aria-label="Perfil de reacción" style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:2px; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.045); border-radius:8px; padding:3px;">
+          <sc-for list="{{ profiles }}" as="pf" hint-placeholder-count="3">
+            <button type="button" role="radio" aria-checked="{{ pf.checked }}" onClick="{{ pf.apply }}" style="height:24px; border:0; border-radius:5px; background:{{ pf.bg }}; box-shadow:{{ pf.shadow }}; color:{{ pf.color }}; font:inherit; font-size:12px; font-weight:500; cursor:pointer; transition:background-color 120ms ease, color 120ms ease;">{{ pf.name }}</button>
+          </sc-for>
+        </div>
+        <p style="margin:0; font-size:11.5px; line-height:1.5; color:#99a0aa; text-wrap:pretty;">{{ profileDesc }}</p>
+      </div>
+
+      <div style="padding:14px 16px 12px; display:flex; flex-direction:column; gap:6px; border-bottom:1px solid rgba(255,255,255,.08);">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:2px;">
+          <span style="font-size:12px; font-weight:600; color:#e8eaee;">Ruteo</span>
+          <span style="font-size:11px; color:#6b7079;">banda → destino</span>
+        </div>
+        <div style="display:grid; grid-template-columns:58px repeat(6, minmax(0,1fr)); align-items:end; height:16px;">
+          <span></span>
+          <sc-for list="{{ destCols }}" as="dc" hint-placeholder-count="6">
+            <span style="font-size:10px; color:#6b7079; text-align:center; white-space:nowrap;">{{ dc.short }}</span>
+          </sc-for>
+        </div>
+        <sc-for list="{{ matrix }}" as="row" hint-placeholder-count="4">
+          <div style="display:grid; grid-template-columns:58px repeat(6, minmax(0,1fr)); align-items:center; height:32px; border-radius:6px; background:{{ row.bg }}; transition:background-color 120ms ease;">
+            <button type="button" onClick="{{ row.select }}" aria-pressed="{{ row.selected }}" style="height:100%; border:0; background:transparent; padding:0 0 0 8px; display:flex; flex-direction:column; justify-content:center; gap:5px; cursor:pointer; font:inherit; text-align:left;">
+              <span style="font-size:12px; font-weight:500; color:{{ row.color }};">{{ row.name }}</span>
+              <span style="display:block; width:38px; height:2px; border-radius:1px; background:rgba(255,255,255,.08); overflow:hidden;"><i ref="{{ row.meterRef }}" style="display:block; width:100%; height:100%; background:#bcc6d4; transform-origin:0 50%; transform:scaleX(0);"></i></span>
+            </button>
+            <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="6">
+              <button type="button" onClick="{{ cell.toggle }}" aria-pressed="{{ cell.on }}" aria-label="{{ cell.label }}" title="{{ cell.label }}" style="height:32px; border:0; background:transparent; display:grid; place-items:center; cursor:pointer; padding:0;">
+                <i style="display:block; width:10px; height:10px; border-radius:50%; background:{{ cell.fill }}; box-shadow:inset 0 0 0 1px {{ cell.ring }}; transition:background-color 120ms ease;"></i>
+              </button>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="padding:14px 16px; display:flex; flex-direction:column; gap:8px; border-bottom:1px solid rgba(255,255,255,.08);">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:2px;">
+          <span style="font-size:12px; font-weight:600; color:#e8eaee;">{{ bandTitle }}</span>
+          <span style="font-size:11px; color:#6b7079;">{{ bandRange }}</span>
+        </div>
+        <sc-for list="{{ sliders }}" as="s" hint-placeholder-count="5">
+          <label style="display:grid; grid-template-columns:82px minmax(0,1fr) 58px; align-items:center; gap:10px; font-size:12px; color:#99a0aa;">
+            <span>{{ s.label }}</span>
+            <input type="range" min="{{ s.min }}" max="{{ s.max }}" step="{{ s.step }}" value="{{ s.value }}" onChange="{{ s.onChange }}" style="width:100%;">
+            <span style="text-align:right; font-variant-numeric:tabular-nums; color:#e8eaee; font-size:11.5px;">{{ s.display }}</span>
+          </label>
+        </sc-for>
+        <p style="margin:2px 0 0; font-size:11px; line-height:1.45; color:#6b7079;">{{ ampNote }}</p>
+      </div>
+
+      <div style="padding:14px 16px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid rgba(255,255,255,.08);">
+        <span style="font-size:12px; font-weight:600; color:#e8eaee;">Render</span>
+        <label style="display:grid; grid-template-columns:82px minmax(0,1fr) 58px; align-items:center; gap:10px; font-size:12px; color:#99a0aa;">
+          <span>Resolución</span>
+          <input type="range" min="50" max="100" step="5" value="{{ scale }}" onChange="{{ onScale }}" style="width:100%;">
+          <span style="text-align:right; font-variant-numeric:tabular-nums; color:#e8eaee; font-size:11.5px;">{{ scaleDisplay }}</span>
+        </label>
+        <button type="button" role="switch" aria-checked="{{ pauseIdleStr }}" onClick="{{ togglePauseIdle }}" style="display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; border:0; background:transparent; padding:0; font:inherit; font-size:12px; color:#99a0aa; cursor:pointer; text-align:left;">
+          <span>Detener el render sin reproducción</span>
+          <span style="position:relative; flex:none; width:28px; height:16px; border-radius:8px; background:{{ switchBg }}; transition:background-color 120ms ease;">
+            <i style="position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:{{ knobBg }}; transform:{{ knobX }}; transition:transform 160ms cubic-bezier(0.23,1,0.32,1);"></i>
+          </span>
+        </button>
+        <p ref="{{ hudRef }}" style="margin:0; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:10.5px; color:#6b7079; font-variant-numeric:tabular-nums;">—</p>
+      </div>
+
+      <a href="#handoff" style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; font-size:12px; color:#99a0aa;" style-hover="color:#e8eaee"><span>Handoff para wgpu</span><span>↓</span></a>
+    </aside>
+  </sc-if>
+</section>
+
+<section id="handoff" data-screen-label="Handoff wgpu" style="border-top:1px solid rgba(255,255,255,.08); background:#09090b;">
+  <div style="max-width:1120px; margin:0 auto; padding:112px 40px 160px; display:flex; flex-direction:column; gap:72px;">
+
+    <header style="display:flex; flex-direction:column; gap:14px; max-width:720px;">
+      <span style="font-size:10.5px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#6b7079;">Handoff para wgpu</span>
+      <h1 style="margin:0; font-size:28px; font-weight:600; letter-spacing:-0.01em; color:#e8eaee;">Cinta · referencia de render</h1>
+      <p style="margin:0; font-size:15px; line-height:1.65; color:#99a0aa; text-wrap:pretty;">Especificación para portar el visualizador a Rust + wgpu (WGSL). La CPU solo hace trabajo escalar por frame: análisis de bandas, resortes y suma de destinos. Después sube un único búfer de uniforms de 1312 bytes. La GPU genera toda la geometría a partir de <code style="font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:13px; color:#e8eaee;">vertex_index</code>. Las constantes, el layout y los perfiles de esta página se leen del mismo código que mueve el prototipo de arriba.</p>
+    </header>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">01</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Pipeline por frame</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+        <ol style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:4px;">
+          <li>Espectro → 3 energías normalizadas y centroide (§07).</li>
+          <li>Historial de 90 ms: la imagen lee la energía retrasada, sincronizada con lo que suena. La detección de ataque usa la actual para anticipar (§08).</li>
+          <li>Por banda: sensibilidad → curva γ → resorte críticamente amortiguado con ataque y liberación propios (§08).</li>
+          <li>Suma por destino × amplitud × límite, y recorte al rango del destino (§09).</li>
+          <li>Integrar la cabeza (<span style="color:#e8eaee;">head += dt·(1 + v)·(1 − 0.6·quiet)·play / 10 s</span>) y el reloj de movimiento τ (<span style="color:#e8eaee;">τ += dt·play</span>).</li>
+          <li><span style="color:#e8eaee;">queue.write_buffer(frame_ubo, 0, bytes)</span> con 1312 B y 4 draws.</li>
+        </ol>
+        <div style="border:1px solid rgba(255,255,255,.08); border-radius:8px; overflow:hidden; font-size:12.5px;">
+          <div style="display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr 1fr; gap:12px; padding:10px 14px; background:#0e0e12; color:#6b7079; font-size:10.5px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase;"><span>Pase</span><span>Topología</span><span>Vértices</span><span>Mezcla</span><span>Profundidad</span></div>
+          <div style="display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">1 · Polvo</span><span>TriangleList</span><span>6 × 700</span><span>One + One</span><span>off</span></div>
+          <div style="display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">2 · Halo</span><span>TriangleStrip</span><span>2 × 640</span><span>One + One</span><span>off</span></div>
+          <div style="display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">3 · Cinta</span><span>TriangleStrip</span><span>2 × 640</span><span>SrcAlpha, 1−SrcAlpha</span><span>LessEqual + escritura</span></div>
+          <div style="display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">4 · Destello</span><span>TriangleList</span><span>6</span><span>One + One</span><span>off</span></div>
+        </div>
+        <p style="margin:0;">Los cuatro pipelines comparten un BindGroup con un solo uniform buffer. No hay vertex buffers ni index buffers: <span style="color:#e8eaee;">draw(0..n, 0..1)</span> y cull mode None.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">02</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Trayectoria por longitud de arco</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">P(t) = ( cos t , sin t · cos t ) / (1 + k · sin² t)      t ∈ [0, 2π)
+z(t) = Z_AMP · sin t                                     cruce por delante y por detrás
+k = 1 → Bernoulli (por defecto)   ·   k = 0 → Gerono     mismo cruce en t = π/2 y 3π/2
+
+S(t) = ∫₀ᵗ |P′ₓᵧ(τ)| dτ          L = S(2π)
+lut[j] = t(j · L / 256) / 2π      j = 0…255,  lut[256] = 1
+t(u)   = 2π · mix(lut[⌊256u⌋], lut[⌊256u⌋ + 1], fract(256u))</pre>
+        <p style="margin:0;">La LUT se construye una vez, al arrancar o al cambiar k. Se integra la cuerda en 4096 pasos y se invierte con búsqueda lineal. Ocupa 64 vec4 del uniform buffer y se sube con el resto. Longitudes medidas: Bernoulli L = <span style="color:#e8eaee; font-variant-numeric:tabular-nums;">{{ lenB }}</span>, Gerono L = <span style="color:#e8eaee; font-variant-numeric:tabular-nums;">{{ lenG }}</span>. Por simetría, los cruces caen exactamente en u = 0.25 y 0.75.</p>
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">vid  → i = vid ≫ 1,  lado = 2·(vid &amp; 1) − 1
+v    = i / (SEGS − 1)              0 cola … 1 cabeza
+a    = 1 − v                       edad
+u    = fract(head − a · TRAIL)     posición en la curva, en vueltas
+eco  : P ← Rz(ECHO_ROT·a) · P · (1 + ECHO_SCALE·a) − ẑ · ECHO_Z·a</pre>
+        <p style="margin:0;">La estela mide 1.6 vueltas, así que la cola pasa por donde ya pasó la cabeza. El eco gira, agranda y aleja un poco las vueltas antiguas para que no haya z-fighting y la cinta se lea como un trazo que deja huella.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">03</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Marco, torsión y volteo</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">T = normalize(P(t + ε) − P(t − ε))      ε = 0.002
+N = normalize(ẑ − (ẑ·T) T)
+B = T × N
+
+θ(u) = π · [ smoothstep(0.25 − TW, 0.25 + TW, u) + smoothstep(0.75 − TW, 0.75 + TW, u) ]
+     + LOBE_TILT · sin(4πu) · (0.75 + 0.25 · sin 0.4τ)
+     + τᵣ · sin(6πu − 1.7τ)                          τᵣ = torsión reactiva (fx.y)
+
+D = cos θ · B + sin θ · N                            dirección del ancho
+X = P + D · lado · w</pre>
+        <p style="margin:0;">El giro completo de 2π por vuelta se reparte en dos medios giros, cada uno concentrado en ±TW alrededor de un cruce. Entre cruces la cinta queda casi plana. El lóbulo derecho enseña el anverso y el izquierdo el reverso, y en el centro la cinta pasa de canto, con lo que el ∞ se estrecha como un trazo afilado.</p>
+        <p style="margin:0;">Con la tira emitida en orden (−1, +1) por segmento y <span style="color:#e8eaee;">FrontFace::Ccw</span>, <span style="color:#e8eaee;">@builtin(front_facing)</span> es verdadero en el anverso. Al voltear D, el winding se invierte y el shader cambia de cara sin más lógica.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">04</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Grosor caligráfico</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">w      = W0 · nib(φ) · taper(v) · (1 + clamp(g, −0.15, 0.15) + b)
+nib(φ) = NIB_MIN + (1 − NIB_MIN) · |sin(φ − NIB_ANGLE)|      φ = atan2(T.y, T.x)
+taper  = smoothstep(0, TAIL, v)^1.25 · sqrt(clamp(a / HEAD, 0, 1))
+alfa   = smoothstep(0, 0.45, v)
+g      = grosor reactivo (fx.x)     b = respiración (fx2.z, §10)</pre>
+        <p style="margin:0;">El grosor sigue el modelo de una plumilla plana: es máximo cuando el trazo cruza el ángulo de la plumilla y mínimo cuando corre paralelo a él. La cola se afina hasta 0 y la cabeza cierra en punta redondeada. La reactividad nunca supera ±15 %, de modo que la silueta siempre se reconoce.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">05</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Color en OKLab</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">CPU (solo al cambiar la paleta): hex → sRGB → lineal → OKLab
+lin(c) = c ≤ 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055)^2.4
+l = 0.4122214708 r + 0.5363325363 g + 0.0514459929 b
+m = 0.2119034982 r + 0.6806995451 g + 0.1073969566 b
+s = 0.0883024619 r + 0.2817188376 g + 0.6299787005 b
+L = 0.2104542553 ∛l + 0.7936177850 ∛m − 0.0040720468 ∛s
+a = 1.9779984951 ∛l − 2.4285922050 ∛m + 0.4505937099 ∛s
+b = 0.0259040371 ∛l + 0.7827717662 ∛m − 0.8086757660 ∛s
+
+GPU: gradiente a lo largo de la estela
+x  = pingpong(a + shift)            pingpong(x) = 1 − |1 − (x mod 2)|
+f  = x · (n − 1),  c = mix(pal[⌊f⌋], pal[⌊f⌋ + 1], fract f)              en OKLab
+c  = mix(grad_A(x), grad_B(x), easeInOutCubic(clamp((t − t₀) / 0.6, 0, 1)))
+reverso: L · 0.65,  (a, b) · 0.85,  b − 0.03                             más oscuro, tinte frío
+filo:    e = 1 − smoothstep(0, 1.25 · fwidth(lado), 1 − |lado|)          1 px casi blanco</pre>
+        <p style="margin:0;">Si el usuario cambia la paleta en mitad de un fundido con el mismo número de colores, el destino se actualiza sin reiniciar el fundido. Si cambia el número de colores, A toma el valor de B y empieza un fundido nuevo. La paleta de ejemplo viaja de cabeza a cola: ámbar, cobre, ciruela, plata. En Enn, <span style="color:#e8eaee;">palette.js</span> ya extrae el acento de la portada. Ampliarlo de 2 a 5 cubos de tono alimenta este mismo uniform.</p>
+        <p style="margin:0;">Superficie: usar <span style="color:#e8eaee;">Bgra8Unorm</span> (no *Srgb) y codificar sRGB a mano al final del fragment shader, igual que aquí. Así la mezcla aditiva del halo y del polvo da el mismo resultado que en el prototipo.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">06</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Luz: seda metálica</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">n    = normalize(D × T)  (−n en el reverso)
+nₛ   = normalize(n + lado · 0.65 · D)                curvatura falsa a lo ancho
+spec = (1 − (T·H)²)^24 · smoothstep(−0.2, 0.5, nₛ·L)  Kajiya-Kay, anisótropo a lo largo de T
+diff = (0.5 + 0.5 · nₛ·L)²
+fres = (1 − |nₛ·V|)⁴
+rim  = max(0, nₛ·Lᵣ)² · 0.35
+col  = base·(0.10 + 0.78·diff) + spec·mix(base, luz, 0.45)·0.9 + fres·plata·0.22 + rim·mix(base, plata, 0.5)
+col  = 1 − exp(−1.15 · col)                          hombro suave antes del filo
+L = normalize(−0.35, 0.65, 0.68)   Lᵣ = normalize(0.6, −0.3, −0.75)   plata lineal = (0.503, 0.565, 0.658)</pre>
+        <p style="margin:0;">El brillo anisótropo corre a lo largo de la cinta y se desplaza con el giro, como en un satén. No hay pase de bloom. El resplandor es el pase 2, la misma tira con el triple de ancho, caída gaussiana exp(−3.5·lado²) e intensidad 0.055·(1 + 0.6·borde) en mezcla aditiva.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">07</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Audio → energías</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">FFT 4096, ventana Blackman, sin suavizado propio del analizador
+graves 20–150 Hz · medios 150–2000 Hz · agudos 2000–16000 Hz
+dB_b  = 10 · log10(mean |X|²)                         por banda
+ref_b = max(ref_b − 2 dB/s · dt, dB_b, −60)           AGC de pico
+n_b   = clamp((dB_b − ref_b + 30) / 30, 0, 1)
+f_c   = Σ f·|X|² / Σ |X|²   (40 Hz–16 kHz)
+c     = clamp(log2(f_c / 150) / log2(40), 0, 1)       150 Hz → 0 · 6 kHz → 1; se mantiene en silencio</pre>
+        <p style="margin:0;">En Enn, <span style="color:#e8eaee;">dsp.rs</span> ya calcula un FFT radix-2 propio y 48 bandas logarítmicas (get_spectrum). Agruparlas por frecuencia de corte da las tres energías sin otra FFT, y el centroide se calcula sobre las mismas bandas.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">08</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Resorte, lookahead y anticipación</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">objetivo y = clamp(n · sens, 0, 1)^γ
+ω = 3.89 / T90          T90 = ataque si y &gt; x, si no liberación  (tiempo hasta el 90 % del salto)
+
+// actualización exacta del resorte crítico: estable con cualquier dt
+d  = x − y
+j  = v + ω · d
+e  = exp(−ω · dt)
+x' = y + (d + j · dt) · e
+v' = (v − ω · j · dt) · e
+
+// anticipación de graves
+ataque si  n₀ − ema₀(250 ms) &gt; 0.16  y  n₀ &gt; 0.35  y  pasaron &gt; 180 ms
+graves −= ANTIC · sin²(π · τ / L)       0 ≤ τ ≤ L = 90 ms</pre>
+        <p style="margin:0;">La salida de audio va 90 ms por detrás del análisis. Aquí lo hace un DelayNode. En Enn, las muestras ya están en el búfer de WASAPI antes de sonar, y esa ventana es el lookahead. La imagen lee la energía con 90 ms de retraso, así que se mueve con lo que se oye. Mientras tanto, el ataque detectado en la señal adelantada contrae la cinta un ~5 %, y después se hincha con la inercia del resorte. El resorte crítico no rebota: los graves pesan porque su T90 es largo, no porque oscilen.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">09</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Destinos, límites y perfiles</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+        <div style="border:1px solid rgba(255,255,255,.08); border-radius:8px; overflow:hidden; font-size:12.5px;">
+          <div style="display:grid; grid-template-columns:1.1fr 0.8fr 0.9fr 2fr; gap:12px; padding:10px 14px; background:#0e0e12; color:#6b7079; font-size:10.5px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase;"><span>Destino</span><span>Uniform</span><span>Rango</span><span>Efecto</span></div>
+          <sc-for list="{{ destRows }}" as="d" hint-placeholder-count="6">
+            <div style="display:grid; grid-template-columns:1.1fr 0.8fr 0.9fr 2fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">{{ d.name }}</span><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:12px;">{{ d.uniform }}</span><span style="font-variant-numeric:tabular-nums;">{{ d.range }}</span><span>{{ d.use }}</span></div>
+          </sc-for>
+        </div>
+        <p style="margin:0;">Cada destino es la suma de las bandas ruteadas a él: salida × amplitud × límite, recortada al rango. La amplitud del panel es una fracción del límite, así que ningún ajuste puede deformar la figura.</p>
+        <div style="border:1px solid rgba(255,255,255,.08); border-radius:8px; overflow:hidden; font-size:12.5px;">
+          <div style="display:grid; grid-template-columns:0.7fr 0.8fr 1.4fr 0.6fr 1fr 0.5fr 0.6fr; gap:10px; padding:10px 14px; background:#0e0e12; color:#6b7079; font-size:10.5px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase;"><span>Perfil</span><span>Banda</span><span>Destinos</span><span>Sens.</span><span>Ataque / lib.</span><span>γ</span><span>Amp.</span></div>
+          <sc-for list="{{ profileRows }}" as="r" hint-placeholder-count="12">
+            <div style="display:grid; grid-template-columns:0.7fr 0.8fr 1.4fr 0.6fr 1fr 0.5fr 0.6fr; gap:10px; padding:8px 14px; border-top:1px solid {{ r.line }}; font-variant-numeric:tabular-nums;"><span style="color:#e8eaee;">{{ r.profile }}</span><span>{{ r.band }}</span><span>{{ r.routes }}</span><span>{{ r.sens }}</span><span>{{ r.times }}</span><span>{{ r.gamma }}</span><span>{{ r.amp }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">10</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Movimiento y tiempos</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+        <div style="border:1px solid rgba(255,255,255,.08); border-radius:8px; overflow:hidden; font-size:12.5px;">
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:10px 14px; background:#0e0e12; color:#6b7079; font-size:10.5px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase;"><span>Qué</span><span>Curva</span><span>Tiempo</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Recorrido</span><span>velocidad de arco constante</span><span>10 s / vuelta</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Volteo en el cruce</span><span>smoothstep, en el espacio de la curva</span><span>±0.07 vuelta</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Fundido de paleta</span><span>easeInOutCubic</span><span>600 ms</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Respiración</span><span>0.05 · quiet · (0.5 − 0.5 cos 2πτ/5.6), easeInOutSine</span><span>5.6 s</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Entrada en silencio</span><span>resorte crítico sobre quiet</span><span>T90 1.6 s</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Vuelta lenta</span><span>velocidad × (1 − 0.6·quiet); yaw ±0.055 rad · (0.35 + 0.65·quiet)</span><span>yaw 16 s</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Anticipación</span><span>sin², sobre la salida de graves</span><span>90 ms</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Frenado al parar</span><span>resorte crítico sobre play → 0; τ avanza · play</span><span>T90 0.9 s</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Deriva de cámara</span><span>Lissajous, (0.012, 0.008) NDC</span><span>23 s × 17 s</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Polvo · destellos</span><span>ventanas de 1/9 s, caída lineal dentro de la ventana</span><span>111 ms</span></div>
+          <div style="display:grid; grid-template-columns:1.3fr 1.8fr 1fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee;">Interfaz</span><span>cubic-bezier(0.23, 1, 0.32, 1), el --ease-out de Enn</span><span>200 ms</span></div>
+        </div>
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">easeInOutCubic(x) = x &lt; 0.5 ? 4x³ : 1 − (−2x + 2)³ / 2
+smoothstep(a, b, x) = s²(3 − 2s),  s = clamp((x − a)/(b − a), 0, 1)</pre>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">11</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Cámara y capas de paralaje</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.75; color:#e8eaee; overflow-x:auto;">fov_y = 8°,  f = 1 / tan 4° = 14.30,  D = 12,  near = 9,  far = 16
+R     = WIDTH_FRAC · aspecto · D / f          la lemniscata ocupa el 60 % del ancho
+M     = Ry(yaw) · Rx(TILT)                     TILT = −0.42 rad
+z_v   = (M·X·R).z − D
+clip  = ( x·f/aspecto, y·f, (z_v·far + far·near)/(near − far), −z_v )   wgpu, z ∈ [0, 1]
+clip.xy += deriva · paralaje · clip.w
+paralaje: polvo 0.25…0.45 · cinta 1.0 · destello 1.8 (+6 % de separación radial)</pre>
+        <p style="margin:0;">Con 8° la cámara es casi ortográfica: la profundidad la dan el cruce por delante y por detrás, el eco de las vueltas y las tres capas. El polvo vive en la capa lejana como quads de 1–2 px. El destello cercano es una línea anamórfica desenfocada que sigue a la cabeza con más paralaje. No hay orbes.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">12</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Uniforms</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+        <div style="border:1px solid rgba(255,255,255,.08); border-radius:8px; overflow:hidden; font-size:12.5px;">
+          <div style="display:grid; grid-template-columns:0.7fr 1.3fr 0.5fr 2.4fr; gap:12px; padding:10px 14px; background:#0e0e12; color:#6b7079; font-size:10.5px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase;"><span>Campo</span><span>Tipo</span><span>Offset</span><span>Contenido</span></div>
+          <sc-for list="{{ layoutRows }}" as="l" hint-placeholder-count="11">
+            <div style="display:grid; grid-template-columns:0.7fr 1.3fr 0.5fr 2.4fr; gap:12px; padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee; font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:12px;">{{ l.name }}</span><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:12px;">{{ l.type }}</span><span style="font-variant-numeric:tabular-nums;">{{ l.offset }}</span><span>{{ l.desc }}</span></div>
+          </sc-for>
+        </div>
+        <p style="margin:0;">Todo es vec4 o array de vec4: el stride de 16 B coincide en std140 y en las reglas de layout de WGSL, así que el mismo Float32Array de 328 floats que usa el prototipo se puede subir tal cual. Las energías crudas ya suavizadas van en energy, y el centroide en energy.w.</p>
+        <div style="border:1px solid rgba(255,255,255,.08); border-radius:8px; overflow:hidden; font-size:12.5px;">
+          <div style="display:grid; grid-template-columns:1.6fr 1.2fr 2fr; gap:12px; padding:10px 14px; background:#0e0e12; color:#6b7079; font-size:10.5px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase;"><span>Constante</span><span>Valor</span><span>Qué controla</span></div>
+          <sc-for list="{{ constRows }}" as="c" hint-placeholder-count="20">
+            <div style="display:grid; grid-template-columns:1.6fr 1.2fr 2fr; gap:12px; padding:8px 14px; border-top:1px solid rgba(255,255,255,.06);"><span style="color:#e8eaee; font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11.5px; overflow-wrap:anywhere;">{{ c.name }}</span><span style="font-variant-numeric:tabular-nums;">{{ c.value }}</span><span>{{ c.desc }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">13</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">WGSL de la cinta</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.65; color:#99a0aa;">
+        <p style="margin:0;">Traducción directa del shader GLSL ES 3.0 que corre arriba. Los otros tres pases reutilizan lut_t, curve, world_rot, project y los helpers de color.</p>
+<pre style="margin:0; padding:16px 18px; background:#0e0e12; border:1px solid rgba(255,255,255,.08); border-radius:8px; font-family:'Cascadia Mono','JetBrains Mono',ui-monospace,Consolas,monospace; font-size:12px; line-height:1.7; color:#c9ced6; overflow-x:auto;">struct Frame {
+  energy : vec4f,                 //    0  graves, medios, agudos, centroide
+  fx     : vec4f,                 //   16  grosor, torsión, borde, color
+  fx2    : vec4f,                 //   32  polvo, quiet, respiración, play
+  time   : vec4f,                 //   48  τ, head, pal_mix, k
+  view   : vec4f,                 //   64  ancho px, alto px, aspecto, R
+  cam    : vec4f,                 //   80  D, f, tilt, yaw
+  drift  : vec4f,                 //   96  dx, dy, near, far
+  counts : vec4f,                 //  112  nA, nB, segs, estela
+  pal_a  : array&lt;vec4f, 5&gt;,       //  128  OKLab
+  pal_b  : array&lt;vec4f, 5&gt;,       //  208  OKLab
+  lut    : array&lt;vec4f, 64&gt;,      //  288  t(s)/2π
+};                                // 1312 B
+@group(0) @binding(0) var&lt;uniform&gt; U : Frame;
+
+const PI = 3.14159265;
+const TAU = 6.28318531;
+<sc-for list="{{ wgslConsts }}" as="c" hint-placeholder-count="16"><span style="display:block;">const {{ c.name }} = {{ c.val }};</span></sc-for>const L_KEY  = vec3f(-0.3542, 0.6578, 0.6882);
+const L_RIM  = vec3f(0.6052, -0.3026, -0.7365);
+const SILVER = vec3f(0.503, 0.565, 0.658);
+const LIGHT  = vec3f(1.0, 0.97, 0.92);
+const EDGE   = vec3f(0.93, 0.95, 0.98);
+
+fn lut_t(u: f32) -&gt; f32 {
+  let x = fract(u) * 256.0;
+  let k = min(u32(x), 255u);
+  let a = U.lut[k &gt;&gt; 2u][k &amp; 3u];
+  var b = 1.0;
+  if (k &lt; 255u) { b = U.lut[(k + 1u) &gt;&gt; 2u][(k + 1u) &amp; 3u]; }
+  return mix(a, b, fract(x)) * TAU;
+}
+
+fn curve(t: f32) -&gt; vec3f {
+  let s = sin(t);
+  let c = cos(t);
+  let d = 1.0 / (1.0 + U.time.w * s * s);
+  return vec3f(c * d, s * c * d, Z_AMP * s);
+}
+
+fn world_rot() -&gt; mat3x3f {
+  let ct = cos(U.cam.z); let st = sin(U.cam.z);
+  let cy = cos(U.cam.w); let sy = sin(U.cam.w);
+  let rx = mat3x3f(1.0, 0.0, 0.0,  0.0, ct, st,  0.0, -st, ct);
+  let ry = mat3x3f(cy, 0.0, -sy,  0.0, 1.0, 0.0,  sy, 0.0, cy);
+  return ry * rx;
+}
+
+fn project(w: vec3f, par: f32) -&gt; vec4f {
+  let zv = w.z - U.cam.x;
+  let n = U.drift.z;
+  let f = U.drift.w;
+  let wc = -zv;
+  return vec4f(w.x * U.cam.y / U.view.z + U.drift.x * par * wc,
+               w.y * U.cam.y + U.drift.y * par * wc,
+               (zv * f + f * n) / (n - f),
+               wc);
+}
+
+struct VOut {
+  @builtin(position) pos : vec4f,
+  @location(0) p_w   : vec3f,
+  @location(1) t_w   : vec3f,
+  @location(2) d_w   : vec3f,
+  @location(3) side  : f32,
+  @location(4) grad  : f32,
+  @location(5) alpha : f32,
+};
+
+@vertex
+fn vs_ribbon(@builtin(vertex_index) vid: u32) -&gt; VOut {
+  let side = f32(vid &amp; 1u) * 2.0 - 1.0;
+  let v = f32(vid &gt;&gt; 1u) / (U.counts.z - 1.0);
+  let age = 1.0 - v;
+  let u = fract(U.time.y - age * U.counts.w);
+  let t = lut_t(u);
+  let tg = normalize(curve(t + 0.002) - curve(t - 0.002));
+  let nz = normalize(vec3f(0.0, 0.0, 1.0) - tg.z * tg);
+  let bn = cross(tg, nz);
+  let tau = U.time.x;
+  let th = PI * (smoothstep(0.25 - TW, 0.25 + TW, u) + smoothstep(0.75 - TW, 0.75 + TW, u))
+         + LOBE_TILT * sin(2.0 * TAU * u) * (0.75 + 0.25 * sin(0.4 * tau))
+         + U.fx.y * sin(3.0 * TAU * u - 1.7 * tau);
+  let d = cos(th) * bn + sin(th) * nz;
+  let nib = NIB_MIN + (1.0 - NIB_MIN) * abs(sin(atan2(tg.y, tg.x) - NIB_ANGLE));
+  let taper = pow(smoothstep(0.0, TAIL, v), 1.25) * sqrt(clamp(age / HEAD, 0.0, 1.0));
+  let w = W0 * nib * taper * (1.0 + clamp(U.fx.x, -0.15, 0.15) + U.fx2.z);
+  let ea = ECHO_ROT * age;
+  let re = mat3x3f(cos(ea), sin(ea), 0.0,  -sin(ea), cos(ea), 0.0,  0.0, 0.0, 1.0);
+  let p = re * curve(t) * (1.0 + ECHO_SCALE * age) - vec3f(0.0, 0.0, ECHO_Z * age);
+  let m = world_rot();
+  let pw = m * (p + re * d * side * w) * U.view.w;
+  var o: VOut;
+  o.pos = project(pw, 1.0);
+  o.p_w = pw;
+  o.t_w = m * (re * tg);
+  o.d_w = m * (re * d);
+  o.side = side;
+  o.grad = age + U.fx.w;
+  o.alpha = smoothstep(0.0, 0.45, v);
+  return o;
+}
+
+fn pal_stop(which: u32, k: u32) -&gt; vec3f {
+  if (which == 0u) { return U.pal_a[k].xyz; }
+  return U.pal_b[k].xyz;
+}
+fn grad(which: u32, n: f32, x: f32) -&gt; vec3f {
+  let f = x * (n - 1.0);
+  let k = u32(min(floor(f), n - 2.0));
+  return mix(pal_stop(which, k), pal_stop(which, k + 1u), f - f32(k));
+}
+fn palette(x: f32) -&gt; vec3f {
+  return mix(grad(0u, U.counts.x, x), grad(1u, U.counts.y, x), U.time.z);
+}
+fn pingpong(x: f32) -&gt; f32 { return 1.0 - abs(1.0 - (x - 2.0 * floor(0.5 * x))); }
+fn oklab_to_linear(c: vec3f) -&gt; vec3f {
+  let l = c.x + 0.3963377774 * c.y + 0.2158037573 * c.z;
+  let m = c.x - 0.1055613458 * c.y - 0.0638541728 * c.z;
+  let s = c.x - 0.0894841775 * c.y - 1.2914855480 * c.z;
+  let l3 = l * l * l; let m3 = m * m * m; let s3 = s * s * s;
+  return vec3f( 4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3,
+               -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3,
+               -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3);
+}
+fn encode_srgb(c: vec3f) -&gt; vec3f {
+  let x = clamp(c, vec3f(0.0), vec3f(1.0));
+  return select(1.055 * pow(x, vec3f(1.0 / 2.4)) - 0.055, 12.92 * x, x &lt;= vec3f(0.0031308));
+}
+
+@fragment
+fn fs_ribbon(i: VOut, @builtin(front_facing) front: bool) -&gt; @location(0) vec4f {
+  let fw = fwidth(i.side);
+  var lab = palette(pingpong(i.grad));
+  if (!front) { lab = vec3f(lab.x * BACK_L, lab.yz * BACK_C + vec2f(0.0, BACK_B)); }
+  let base = max(oklab_to_linear(lab), vec3f(0.0));
+  let T = normalize(i.t_w);
+  let D = normalize(i.d_w);
+  var n = normalize(cross(D, T));
+  if (!front) { n = -n; }
+  let ns = normalize(n + i.side * 0.65 * D);
+  let V = normalize(vec3f(0.0, 0.0, U.cam.x) - i.p_w);
+  let H = normalize(L_KEY + V);
+  let th = dot(T, H);
+  let ndl = dot(ns, L_KEY);
+  let spec = pow(max(1.0 - th * th, 0.0), 24.0) * smoothstep(-0.2, 0.5, ndl);
+  let diff = (0.5 + 0.5 * ndl) * (0.5 + 0.5 * ndl);
+  let fres = pow(1.0 - abs(dot(ns, V)), 4.0);
+  let rim = pow(max(dot(ns, L_RIM), 0.0), 2.0) * 0.35;
+  var col = base * (0.10 + 0.78 * diff)
+          + spec * mix(base, LIGHT, 0.45) * 0.9
+          + fres * SILVER * 0.22
+          + rim * mix(base, SILVER, 0.5);
+  col = 1.0 - exp(-1.15 * col);
+  let e = 1.0 - smoothstep(0.0, 1.25 * fw, 1.0 - abs(i.side));
+  col = mix(col, EDGE, clamp(e * (0.42 + 0.30 * spec) * (1.0 + U.fx.z), 0.0, 0.92));
+  return vec4f(encode_srgb(col), i.alpha);
+}</pre>
+        <p style="margin:0;">Polvo: WebGPU no tiene tamaño de punto, así que cada mota es un quad de 6 vértices: <span style="color:#e8eaee;">id = vid / 6</span>, <span style="color:#e8eaee;">esquina = vid % 6</span>. Se expande en píxeles con <span style="color:#e8eaee;">2·px / view.xy</span>. El prototipo ya lo hace así, en lugar de usar gl_PointSize, para que el port sea literal.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:24px 56px;">
+      <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:6px;"><span style="font-family:'Cascadia Mono',ui-monospace,Consolas,monospace; font-size:11px; color:#6b7079;">14</span><h2 style="margin:0; font-size:20px; font-weight:600; color:#e8eaee;">Optimización</h2></div>
+      <div style="flex:1 1 560px; min-width:0; display:flex; flex-direction:column; gap:10px; font-size:14px; line-height:1.65; color:#99a0aa;">
+        <p style="margin:0;"><span style="color:#e8eaee;">Geometría en el shader.</span> Cuatro draws sin vertex buffers. Toda posición, normal, grosor y color sale de (índice, lado) y del uniform buffer. La CPU no toca ningún vértice: por frame hace unas 60 operaciones escalares y una sola write_buffer de 1312 B.</p>
+        <p style="margin:0;"><span style="color:#e8eaee;">Resolución escalable 50–100 %.</span> Se renderiza a una textura del tamaño escalado (o se configura la superficie así) y se hace un blit al tamaño de la ventana. Aquí es el backing store del canvas. Con MSAA 4× en la cinta, el 75 % se ve casi igual que el 100 % y cuesta ~56 % de los fragmentos.</p>
+        <p style="margin:0;"><span style="color:#e8eaee;">Coste 0.</span> No se pide frame si la ventana está oculta, minimizada o fuera de vista (WindowEvent::Occluded). Tampoco si no hay reproducción y el frenado terminó: play &lt; 0.002, resortes quietos y fundido completo. Cualquier cambio en el panel despierta el render 1.2 s. Enn mide hoy ~0.3 % de CPU en reposo sin stream abierto, y con el render detenido el visualizador no debe sumar nada a esa cifra.</p>
+        <p style="margin:0;"><span style="color:#e8eaee;">Brillo falso.</span> Sin bloom ni pases fuera de pantalla. El halo es la misma tira ensanchada con mezcla aditiva, y el filo de 1 px usa fwidth dentro del fragment shader de la cinta.</p>
+        <p style="margin:0;"><span style="color:#e8eaee;">60 fps.</span> Unos 6 800 vértices y tres pases aditivos casi vacíos. El coste está dominado por la cobertura de píxeles de la cinta, que ocupa un ~8 % de la pantalla.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;curva&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Bernoulli&quot;,&quot;Gerono&quot;],&quot;default&quot;:&quot;Bernoulli&quot;,&quot;tsType&quot;:&quot;'Bernoulli' | 'Gerono'&quot;},&quot;estela&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:1.0,&quot;max&quot;:2.0,&quot;step&quot;:0.05,&quot;unit&quot;:&quot;vueltas&quot;,&quot;default&quot;:1.6,&quot;tsType&quot;:&quot;number&quot;},&quot;autoOcultar&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const TAU = Math.PI * 2;
+const K = {
+  SEGS: 640, TRAIL: 1.6, LAP_S: 10, Z_AMP: 0.16, TILT: -0.42, FOV_DEG: 8, CAM_D: 12, NEAR: 9, FAR: 16, WIDTH_FRAC: 0.6,
+  W0: 0.05, NIB_ANGLE: 0.6, NIB_MIN: 0.42, TAIL: 0.62, HEAD: 0.018, TW: 0.07, LOBE_TILT: 0.22,
+  ECHO_ROT: 0.18, ECHO_SCALE: 0.035, ECHO_Z: 0.1, GLOW_W: 3.0, GLOW_I: 0.055,
+  BACK_L: 0.65, BACK_C: 0.85, BACK_B: -0.03,
+  BREATH_A: 0.05, BREATH_T: 5.6, QUIET_SLOW: 0.6, QUIET_T90: 1.6, STOP_T90: 0.9, IDLE_S: 4,
+  LOOKAHEAD: 0.09, ANTIC: 0.35, PAL_FADE: 0.6, DUST_N: 700, LUT_N: 256, FLOATS: 328,
+};
+const SHADER_CONSTS = ['Z_AMP', 'W0', 'NIB_ANGLE', 'NIB_MIN', 'TAIL', 'HEAD', 'TW', 'LOBE_TILT', 'ECHO_ROT', 'ECHO_SCALE', 'ECHO_Z', 'GLOW_W', 'GLOW_I', 'BACK_L', 'BACK_C', 'BACK_B'];
+const f1 = (v) => (Number.isInteger(v) ? v.toFixed(1) : String(v));
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+const OMEGA = (t90) => 3.89 / t90;
+const easeInOutCubic = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+
+const BANDS = [
+  { name: 'Graves', range: '20–150 Hz' },
+  { name: 'Medios', range: '150 Hz–2 kHz' },
+  { name: 'Agudos', range: '2 kHz en adelante' },
+  { name: 'Tono', range: 'centroide espectral' },
+];
+const DESTS = [
+  { key: 'grosor', short: 'Grosor', name: 'respiración del grosor', min: -0.15, bound: 0.15, uniform: 'fx.x', range: '±0.15', use: 'w · (1 + g)' },
+  { key: 'velocidad', short: 'Veloc.', name: 'velocidad de recorrido', min: -0.2, bound: 0.2, uniform: 'CPU', range: '±0.20', use: 'head += dt · (1 + v) / 10 s' },
+  { key: 'torsion', short: 'Torsión', name: 'torsión', min: 0, bound: 0.6, uniform: 'fx.y', range: '0…0.6 rad', use: 'θ += τᵣ · sin(6πu − 1.7τ)' },
+  { key: 'borde', short: 'Borde', name: 'brillo del borde', min: 0, bound: 1.5, uniform: 'fx.z', range: '0…1.5', use: 'filo × (1 + b), halo × (1 + 0.6b)' },
+  { key: 'color', short: 'Color', name: 'desplazamiento de color', min: 0, bound: 0.5, uniform: 'fx.w', range: '0…0.5', use: 'x = a + shift en la paleta' },
+  { key: 'polvo', short: 'Polvo', name: 'destello del polvo', min: 0, bound: 1.0, uniform: 'fx2.x', range: '0…1', use: 'destellos y brillo del polvo' },
+];
+const DI = {}; DESTS.forEach((d, i) => { DI[d.key] = i; });
+const PROFILES = {
+  sub: { name: 'Sub', desc: 'Graves → grosor, lento y pesado. Los agudos encienden el filo y el tono apenas tiñe.', bands: [
+    { routes: ['grosor'], sens: 1.0, att: 160, rel: 720, gamma: 1.7, amp: 1.0 },
+    { routes: ['torsion'], sens: 0.8, att: 90, rel: 500, gamma: 1.3, amp: 0.45 },
+    { routes: ['borde'], sens: 0.75, att: 8, rel: 140, gamma: 1.6, amp: 0.4 },
+    { routes: ['color'], sens: 1.0, att: 400, rel: 1200, gamma: 1.0, amp: 0.25 },
+  ] },
+  aire: { name: 'Aire', desc: 'Agudos → filo y polvo, una chispa corta. Los graves solo empujan la velocidad.', bands: [
+    { routes: ['velocidad'], sens: 0.8, att: 200, rel: 900, gamma: 1.4, amp: 0.5 },
+    { routes: [], sens: 0.8, att: 80, rel: 400, gamma: 1.2, amp: 0.3 },
+    { routes: ['borde', 'polvo'], sens: 1.2, att: 5, rel: 110, gamma: 1.2, amp: 1.0 },
+    { routes: ['color'], sens: 1.0, att: 300, rel: 1000, gamma: 1.0, amp: 0.2 },
+  ] },
+  tono: { name: 'Tono', desc: 'El centroide recorre la paleta: cuanto más agudo, más se desplaza el color hacia la cola. Graves y agudos quedan de fondo.', bands: [
+    { routes: ['grosor'], sens: 0.9, att: 140, rel: 650, gamma: 1.5, amp: 0.4 },
+    { routes: ['torsion'], sens: 0.8, att: 120, rel: 600, gamma: 1.2, amp: 0.3 },
+    { routes: ['borde'], sens: 0.8, att: 10, rel: 160, gamma: 1.5, amp: 0.35 },
+    { routes: ['color'], sens: 1.2, att: 220, rel: 900, gamma: 0.9, amp: 1.0 },
+  ] },
+};
+const PRESETS = [
+  { key: 'quemado', name: 'Quemado', colors: ['#E0A458', '#B5654A', '#3B2A4A', '#BCC6D4'] },
+  { key: 'plata', name: 'Plata', colors: ['#E8EAEE', '#BCC6D4', '#8A96A8'] },
+  { key: 'laca', name: 'Laca', colors: ['#D9623F', '#F1C9A5', '#4A1F24'] },
+  { key: 'liquen', name: 'Liquen', colors: ['#B8B27A', '#6F7A4E', '#2C3327', '#D8CFB4', '#BCC6D4'] },
+];
+const LAYOUT = [
+  ['energy', 'vec4f', 0, 'graves, medios, agudos (salida de los resortes) y centroide'],
+  ['fx', 'vec4f', 16, 'grosor ±0.15, torsión (rad), borde (×), color (fracción de paleta)'],
+  ['fx2', 'vec4f', 32, 'polvo 0…1, quiet 0…1, respiración, play 0…1'],
+  ['time', 'vec4f', 48, 'τ (s, reloj de movimiento), head (vueltas, [0,1)), pal_mix ya suavizado, k de la curva'],
+  ['view', 'vec4f', 64, 'ancho px, alto px, aspecto, escala de mundo R'],
+  ['cam', 'vec4f', 80, 'D, f = 1/tan(fov/2), tilt, yaw'],
+  ['drift', 'vec4f', 96, 'deriva x, deriva y (NDC), near, far'],
+  ['counts', 'vec4f', 112, 'colores de A, colores de B, segmentos, estela (vueltas)'],
+  ['pal_a', 'array<vec4f, 5>', 128, 'paleta saliente en OKLab (L, a, b, —)'],
+  ['pal_b', 'array<vec4f, 5>', 208, 'paleta entrante en OKLab'],
+  ['lut', 'array<vec4f, 64>', 288, 't(s)/2π, 256 muestras empaquetadas de 4 en 4 (fin: 1312 B)'],
+];
+const ZERO4 = [0, 0, 0, 0];
+
+function srgbToLin(c) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function linToSrgb(c) { c = clamp(c, 0, 1); return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055; }
+function hexToOklab(hex) {
+  const h = hex.replace('#', '');
+  const r = srgbToLin(parseInt(h.slice(0, 2), 16) / 255), g = srgbToLin(parseInt(h.slice(2, 4), 16) / 255), b = srgbToLin(parseInt(h.slice(4, 6), 16) / 255);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
+}
+function oklabToHex([L, A, B]) {
+  const l = Math.pow(L + 0.3963377774 * A + 0.2158037573 * B, 3), m = Math.pow(L - 0.1055613458 * A - 0.0638541728 * B, 3), s = Math.pow(L - 0.0894841775 * A - 1.2914855480 * B, 3);
+  const rgb = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+  return '#' + rgb.map((v) => Math.round(linToSrgb(v) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+function buildLut(k) {
+  const M = 4096, S = new Float64Array(M + 1);
+  const P = (t) => { const s = Math.sin(t), c = Math.cos(t), d = 1 / (1 + k * s * s); return [c * d, s * c * d]; };
+  let prev = P(0);
+  for (let j = 1; j <= M; j++) { const p = P((j / M) * TAU); S[j] = S[j - 1] + Math.hypot(p[0] - prev[0], p[1] - prev[1]); prev = p; }
+  const L = S[M], lut = new Float32Array(K.LUT_N);
+  let j = 0;
+  for (let i = 0; i < K.LUT_N; i++) {
+    const target = (i / K.LUT_N) * L;
+    while (j < M - 1 && S[j + 1] < target) j++;
+    const f = (target - S[j]) / Math.max(1e-12, S[j + 1] - S[j]);
+    lut[i] = (j + f) / M;
+  }
+  return { lut, length: L };
+}
+function springStep(s, target, omega, dt) {
+  const d = s.x - target, j = s.v + omega * d, e = Math.exp(-omega * dt);
+  s.x = target + (d + j * dt) * e;
+  s.v = (s.v - omega * j * dt) * e;
+}
+const cloneBands = (b) => b.map((x) => ({ ...x, routes: x.routes.slice() }));
+
+// ---------------------------------------------------------------- GLSL (mismas fórmulas que el WGSL del handoff)
+const GL_HEAD = `#version 300 es
+precision highp float;
+precision highp int;
+layout(std140) uniform Frame {
+  vec4 energy; vec4 fx; vec4 fx2; vec4 timev; vec4 view; vec4 cam; vec4 drift; vec4 counts;
+  vec4 palA[5]; vec4 palB[5]; vec4 lut[64];
+};
+const float PI = 3.14159265;
+const float TAU = 6.28318531;
+${SHADER_CONSTS.map((n) => `const float ${n} = ${f1(K[n])};`).join('\n')}
+`;
+const GL_VS_LIB = `
+float comp4(vec4 q, int c) { return c == 0 ? q.x : (c == 1 ? q.y : (c == 2 ? q.z : q.w)); }
+float lutT(float u) {
+  float x = fract(u) * 256.0;
+  int k = min(int(floor(x)), 255);
+  float f = x - float(k);
+  float a = comp4(lut[k >> 2], k & 3);
+  int k1 = k + 1;
+  float b = k1 >= 256 ? 1.0 : comp4(lut[k1 >> 2], k1 & 3);
+  return mix(a, b, f) * TAU;
+}
+vec3 curve(float t) {
+  float s = sin(t), c = cos(t);
+  float d = 1.0 / (1.0 + timev.w * s * s);
+  return vec3(c * d, s * c * d, Z_AMP * s);
+}
+mat3 worldRot() {
+  float ct = cos(cam.z), st = sin(cam.z), cy = cos(cam.w), sy = sin(cam.w);
+  mat3 rx = mat3(1.0, 0.0, 0.0, 0.0, ct, st, 0.0, -st, ct);
+  mat3 ry = mat3(cy, 0.0, -sy, 0.0, 1.0, 0.0, sy, 0.0, cy);
+  return ry * rx;
+}
+vec4 project(vec3 w, float par) {
+  float zv = w.z - cam.x;
+  float n = drift.z, f = drift.w;
+  vec4 c = vec4(w.x * cam.y / view.z, w.y * cam.y, (zv * (f + n) + 2.0 * f * n) / (n - f), -zv);
+  c.xy += drift.xy * par * c.w;
+  return c;
+}
+vec2 corner(int c) { return vec2((c == 1 || c == 4 || c == 5) ? 1.0 : -1.0, (c == 2 || c == 3 || c == 5) ? 1.0 : -1.0); }
+`;
+const GL_FS_LIB = `
+vec3 oklabToLinear(vec3 c) {
+  float l_ = c.x + 0.3963377774 * c.y + 0.2158037573 * c.z;
+  float m_ = c.x - 0.1055613458 * c.y - 0.0638541728 * c.z;
+  float s_ = c.x - 0.0894841775 * c.y - 1.2914855480 * c.z;
+  float l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+  return vec3(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+             -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+             -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s);
+}
+vec3 encodeSrgb(vec3 c) { c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+float pingpong(float x) { return 1.0 - abs(1.0 - (x - 2.0 * floor(x * 0.5))); }
+vec3 gradA(float x) { float n = counts.x; float f = x * (n - 1.0); int k = int(min(floor(f), n - 2.0)); return mix(palA[k].xyz, palA[k + 1].xyz, f - float(k)); }
+vec3 gradB(float x) { float n = counts.y; float f = x * (n - 1.0); int k = int(min(floor(f), n - 2.0)); return mix(palB[k].xyz, palB[k + 1].xyz, f - float(k)); }
+vec3 paletteLab(float x) { return mix(gradA(x), gradB(x), timev.z); }
+`;
+const GL_RIBBON_VS = `
+out vec3 vPw; out vec3 vT; out vec3 vD; out float vSide; out float vGrad; out float vAlpha;
+void main() {
+  int i = gl_VertexID >> 1;
+  float side = float(gl_VertexID & 1) * 2.0 - 1.0;
+  float v = float(i) / (counts.z - 1.0);
+  float age = 1.0 - v;
+  float u = fract(timev.y - age * counts.w);
+  float t = lutT(u);
+  vec3 tg = normalize(curve(t + 0.002) - curve(t - 0.002));
+  vec3 nz = normalize(vec3(0.0, 0.0, 1.0) - tg.z * tg);
+  vec3 bn = cross(tg, nz);
+  float tau = timev.x;
+  float th = PI * (smoothstep(0.25 - TW, 0.25 + TW, u) + smoothstep(0.75 - TW, 0.75 + TW, u))
+           + LOBE_TILT * sin(2.0 * TAU * u) * (0.75 + 0.25 * sin(0.4 * tau))
+           + fx.y * sin(3.0 * TAU * u - 1.7 * tau);
+  vec3 d = cos(th) * bn + sin(th) * nz;
+  float nib = NIB_MIN + (1.0 - NIB_MIN) * abs(sin(atan(tg.y, tg.x) - NIB_ANGLE));
+  float taper = pow(smoothstep(0.0, TAIL, v), 1.25) * sqrt(clamp(age / HEAD, 0.0, 1.0));
+  float w = W0 * nib * taper * (1.0 + clamp(fx.x, -0.15, 0.15) + fx2.z);
+  float ea = ECHO_ROT * age;
+  mat3 re = mat3(cos(ea), sin(ea), 0.0, -sin(ea), cos(ea), 0.0, 0.0, 0.0, 1.0);
+  vec3 p = re * curve(t) * (1.0 + ECHO_SCALE * age) - vec3(0.0, 0.0, ECHO_Z * age);
+  mat3 m = worldRot();
+#ifdef GLOW
+  vec3 off = re * bn * side * max(w, W0 * 0.35 * taper) * GLOW_W;
+#else
+  vec3 off = re * d * side * w;
+#endif
+  vec3 pw = m * (p + off) * view.w;
+  gl_Position = project(pw, 1.0);
+  vPw = pw; vT = m * (re * tg); vD = m * (re * d); vSide = side;
+  vGrad = age + fx.w;
+  vAlpha = smoothstep(0.0, 0.45, v);
+}
+`;
+const GL_RIBBON_FS = `
+in vec3 vPw; in vec3 vT; in vec3 vD; in float vSide; in float vGrad; in float vAlpha;
+out vec4 o;
+void main() {
+  bool front = gl_FrontFacing;
+  float fw = fwidth(vSide);
+  vec3 lab = paletteLab(pingpong(vGrad));
+  if (!front) lab = vec3(lab.x * BACK_L, lab.yz * BACK_C + vec2(0.0, BACK_B));
+  vec3 base = max(oklabToLinear(lab), 0.0);
+#ifdef GLOW
+  float g = exp(-vSide * vSide * 3.5) * (1.0 - vSide * vSide);
+  o = vec4(encodeSrgb(base) * g * GLOW_I * (1.0 + 0.6 * fx.z) * vAlpha, 1.0);
+#else
+  vec3 T = normalize(vT), D = normalize(vD);
+  vec3 n = normalize(cross(D, T));
+  if (!front) n = -n;
+  vec3 ns = normalize(n + vSide * 0.65 * D);
+  vec3 V = normalize(vec3(0.0, 0.0, cam.x) - vPw);
+  vec3 Lk = normalize(vec3(-0.35, 0.65, 0.68));
+  vec3 Lr = normalize(vec3(0.6, -0.3, -0.75));
+  vec3 H = normalize(Lk + V);
+  float th = dot(T, H);
+  float ndl = dot(ns, Lk);
+  float spec = pow(max(1.0 - th * th, 0.0), 24.0) * smoothstep(-0.2, 0.5, ndl);
+  float diff = (0.5 + 0.5 * ndl) * (0.5 + 0.5 * ndl);
+  float fres = pow(1.0 - abs(dot(ns, V)), 4.0);
+  float rim = pow(max(dot(ns, Lr), 0.0), 2.0) * 0.35;
+  vec3 silver = vec3(0.503, 0.565, 0.658);
+  vec3 col = base * (0.10 + 0.78 * diff)
+           + spec * mix(base, vec3(1.0, 0.97, 0.92), 0.45) * 0.9
+           + fres * silver * 0.22
+           + rim * mix(base, silver, 0.5);
+  col = 1.0 - exp(-1.15 * col);
+  float e = 1.0 - smoothstep(0.0, 1.25 * fw, 1.0 - abs(vSide));
+  col = mix(col, vec3(0.93, 0.95, 0.98), clamp(e * (0.42 + 0.30 * spec) * (1.0 + fx.z), 0.0, 0.92));
+  o = vec4(encodeSrgb(col), vAlpha);
+#endif
+}
+`;
+const GL_DUST_VS = `
+out vec2 vQ; out float vI; out float vPx;
+vec3 hash3(float n) { return fract(sin(vec3(n, n + 1.7, n + 3.1)) * vec3(43758.5453, 22578.1459, 19642.3490)); }
+float hash1(float n) { return fract(sin(n) * 43758.5453); }
+void main() {
+  int id = gl_VertexID / 6;
+  vec2 q = corner(gl_VertexID - id * 6);
+  float fid = float(id);
+  vec3 h = hash3(fid * 1.371 + 0.5);
+  float dep = h.z;
+  vec2 p = vec2(h.x * 2.4 - 1.2, mod(h.y * 2.4 + timev.x * (0.004 + 0.008 * dep), 2.4) - 1.2);
+  p.x += 0.02 * sin(timev.x * 0.07 + h.y * TAU);
+  p += drift.xy * (0.25 + 0.2 * dep);
+  p.x -= cam.w * (0.25 + 0.25 * dep);
+  float px = (0.6 + 1.4 * dep * dep) * max(1.0, view.y / 1000.0);
+  float slot = floor(timev.x * 9.0);
+  float spark = step(0.965, hash1(fid * 7.13 + slot * 1.618)) * (1.0 - fract(timev.x * 9.0));
+  float tw = 0.55 + 0.45 * sin(timev.x * (0.4 + 1.1 * h.x) + h.y * 40.0);
+  vI = ((0.05 + 0.22 * dep * dep) * tw * (1.0 + 0.5 * fx2.x) + fx2.x * spark * 0.85) * (0.6 + 0.4 * fx2.w) * min(1.0, px);
+  float hs = px + 1.0;
+  vQ = q * hs / px;
+  vPx = px;
+  gl_Position = vec4(p + q * hs * 2.0 / view.xy, 0.0, 1.0);
+}
+`;
+const GL_DUST_FS = `
+in vec2 vQ; in float vI; in float vPx;
+out vec4 o;
+void main() {
+  float aa = 1.0 / vPx;
+  float a = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, length(vQ));
+  o = vec4(vec3(0.74, 0.78, 0.83) * vI * a, 1.0);
+}
+`;
+const GL_STREAK_VS = `
+out vec2 vQ;
+void main() {
+  vec2 q = corner(gl_VertexID);
+  vec3 pw = worldRot() * curve(lutT(fract(timev.y - 0.03))) * view.w;
+  vec4 cl = project(pw, 1.8);
+  vec2 ndc = cl.xy / cl.w * 1.06;
+  vQ = q;
+  gl_Position = vec4(ndc + q * vec2(0.62, 28.0 / view.y), 0.0, 1.0);
+}
+`;
+const GL_STREAK_FS = `
+in vec2 vQ;
+out vec4 o;
+void main() {
+  float core = exp(-vQ.y * vQ.y * 9.0) * pow(max(1.0 - vQ.x * vQ.x, 0.0), 3.0);
+  float hot = exp(-(vQ.x * vQ.x * 40.0 + vQ.y * vQ.y * 12.0));
+  vec3 lab = mix(palA[0].xyz, palB[0].xyz, timev.z);
+  vec3 tint = mix(vec3(0.74, 0.78, 0.83), encodeSrgb(max(oklabToLinear(lab), 0.0)), 0.4);
+  float I = (0.03 + 0.05 * fx.z) * (0.3 + 0.7 * fx2.w);
+  o = vec4(tint * (core * 0.55 + hot) * I, 1.0);
+}
+`;
+function shaderSrc(kind) {
+  const def = kind === 'glow' ? '#define GLOW 1\n' : '';
+  const body = kind === 'dust' ? [GL_DUST_VS, GL_DUST_FS] : kind === 'streak' ? [GL_STREAK_VS, GL_STREAK_FS] : [GL_RIBBON_VS, GL_RIBBON_FS];
+  return { vs: GL_HEAD + def + GL_VS_LIB + body[0], fs: GL_HEAD + def + GL_FS_LIB + body[1] };
+}
+function compileProgram(gl, kind) {
+  const { vs, fs } = shaderSrc(kind);
+  const mk = (type, src) => {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(kind + ': ' + gl.getShaderInfoLog(s));
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(kind + ' link: ' + gl.getProgramInfoLog(p));
+  return p;
+}
+
+// ---------------------------------------------------------------- audio (sintético + archivo)
+class AudioRig {
+  constructor() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = (this.ctx = new AC({ latencyHint: 'interactive' }));
+    this.master = ctx.createGain(); this.master.gain.value = 0.55;
+    this.an = ctx.createAnalyser(); this.an.fftSize = 4096; this.an.smoothingTimeConstant = 0; this.an.minDecibels = -140; this.an.maxDecibels = 0;
+    this.delay = ctx.createDelay(1); this.delay.delayTime.value = K.LOOKAHEAD;
+    this.master.connect(this.an); this.master.connect(this.delay); this.delay.connect(ctx.destination);
+    this.freq = new Float32Array(this.an.frequencyBinCount);
+    this.ref = [-30, -30, -30];
+    this.out = [0, 0, 0, 0.4];
+    const n = ctx.sampleRate;
+    this.noise = ctx.createBuffer(1, n, n);
+    const ch = this.noise.getChannelData(0);
+    for (let i = 0; i < n; i++) ch[i] = Math.random() * 2 - 1;
+    this.mode = null;
+  }
+  startSynth() {
+    this.stopAll();
+    const ctx = this.ctx;
+    this.step = 60 / 104 / 4; this.nextStep = 0; this.nextTime = ctx.currentTime + 0.06;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 5; f.frequency.value = 240;
+    const g = ctx.createGain(); g.gain.value = 0.0001;
+    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+    o1.type = 'sawtooth'; o2.type = 'sawtooth'; o1.frequency.value = 110; o2.frequency.value = 110; o2.detune.value = 9;
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.master);
+    o1.start(); o2.start();
+    this.pad = { f, g, o1, o2 };
+    this.mode = 'synth';
+    this.timer = setInterval(() => this.schedule(), 25);
+    this.schedule();
+  }
+  sweep(b) {
+    const ex = (a, z, x) => a * Math.pow(z / a, x);
+    if (b <= 6) return ex(240, 3600, b / 6);
+    if (b <= 12) return ex(3600, 240, (b - 6) / 6);
+    if (b <= 14) return ex(240, 7000, (b - 12) / 2);
+    return ex(7000, 240, (b - 14) / 2);
+  }
+  schedule() {
+    const ahead = this.ctx.currentTime + 0.14;
+    while (this.nextTime < ahead) { this.playStep(this.nextStep, this.nextTime); this.nextStep++; this.nextTime += this.step; }
+  }
+  playStep(n, t) {
+    const s = n % 16, bar = Math.floor(n / 16) % 16;
+    if (s === 0) {
+      const p = this.pad, dur = this.step * 16;
+      const notes = [110, 130.81, 87.31, 98];
+      const fr = notes[Math.floor(bar / 2) % 4];
+      p.o1.frequency.setTargetAtTime(fr, t, 0.08); p.o2.frequency.setTargetAtTime(fr, t, 0.08);
+      p.g.gain.setTargetAtTime(bar < 12 ? 0.07 : bar < 14 ? 0.12 : 0.0001, t, bar === 14 ? 0.3 : 0.2);
+      p.f.frequency.setValueAtTime(this.sweep(bar), t);
+      p.f.frequency.exponentialRampToValueAtTime(this.sweep(bar + 1), t + dur);
+    }
+    if (bar < 12) {
+      if (s === 0 || s === 8) this.kick(t, 1);
+      if (s === 10 && bar % 2 === 1) this.kick(t, 0.55);
+      if (s === 14 && bar % 4 === 3) this.kick(t, 0.7);
+      if (s % 2 === 0) this.hat(t, s % 4 === 2 ? 0.5 : 0.28, 0.035);
+      if (s === 14 && bar % 2 === 0) this.hat(t, 0.36, 0.2);
+      if (bar >= 8 && s % 2 === 1) this.hat(t, 0.14, 0.025);
+    } else if (bar < 14 && s % 4 === 2) {
+      this.hat(t, 0.1, 0.03);
+    }
+  }
+  kick(t, vel) {
+    const ctx = this.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.12);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.48);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 0.5);
+  }
+  hat(t, vel, dec) {
+    const ctx = this.ctx, s = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = this.noise; hp.type = 'highpass'; hp.frequency.value = 7200;
+    g.gain.setValueAtTime(vel, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    s.connect(hp); hp.connect(g); g.connect(this.master); s.start(t, Math.random() * 0.5); s.stop(t + dec + 0.02);
+  }
+  async playFile(file) {
+    const data = await file.arrayBuffer();
+    const buf = await new Promise((res, rej) => this.ctx.decodeAudioData(data, res, rej));
+    this.stopAll();
+    const s = this.ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(this.master); s.start();
+    this.fileSrc = s; this.mode = 'file';
+  }
+  stopAll() {
+    if (this.timer) { clearInterval(this.timer); this.timer = 0; }
+    if (this.pad) { try { this.pad.o1.stop(); this.pad.o2.stop(); } catch (e) {} this.pad.g.disconnect(); this.pad = null; }
+    if (this.fileSrc) { try { this.fileSrc.stop(); } catch (e) {} this.fileSrc.disconnect(); this.fileSrc = null; }
+    this.mode = null;
+  }
+  read(dt) {
+    const a = this.an, F = this.freq;
+    a.getFloatFrequencyData(F);
+    const binHz = this.ctx.sampleRate / a.fftSize;
+    const P = [0, 0, 0], N = [0, 0, 0];
+    let cw = 0, cs = 0;
+    const top = Math.min(F.length, Math.floor(16000 / binHz));
+    for (let i = Math.ceil(20 / binHz); i < top; i++) {
+      const f = i * binHz, b = f < 150 ? 0 : f < 2000 ? 1 : 2;
+      N[b]++;
+      const db = F[i];
+      if (!(db > -150)) continue;
+      const p = Math.pow(10, db / 10);
+      P[b] += p;
+      if (f > 40) { cw += f * p; cs += p; }
+    }
+    for (let b = 0; b < 3; b++) {
+      const db = 10 * Math.log10(P[b] / Math.max(1, N[b]) + 1e-15);
+      this.ref[b] = Math.max(this.ref[b] - 2 * dt, db, -60);
+      this.out[b] = clamp((db - this.ref[b] + 30) / 30, 0, 1);
+    }
+    if (cs > 1e-12 && Math.max(this.out[0], this.out[1], this.out[2]) > 0.02) this.out[3] = clamp(Math.log2(cw / cs / 150) / Math.log2(40), 0, 1);
+    return this.out;
+  }
+}
+
+class Component extends DCLogic {
+  state = {
+    palette: PRESETS[0].colors.slice(), preset: 'quemado',
+    profile: 'sub', edited: false, bands: cloneBands(PROFILES.sub.bands), sel: 0,
+    scale: 100, pauseIdle: true,
+    playing: false, source: 'synth', fileName: '', loading: false, err: '',
+    panelOpen: true, chromeHidden: false, glFail: false,
+  };
+  canvasRef = React.createRef();
+  stageRef = React.createRef();
+  meterEls = [];
+  meterRefs = BANDS.map((_, i) => (el) => { this.meterEls[i] = el; });
+  stateRef = (el) => { this.stateEl = el; };
+  dotRef = (el) => { this.dotEl = el; };
+  hudRef = (el) => { this.hudEl = el; };
+
+  componentDidMount() {
+    this.U = new Float32Array(K.FLOATS);
+    this.lens = { b: buildLut(1).length, g: buildLut(0).length };
+    const lab = this.state.palette.map(hexToOklab);
+    this.eng = {
+      springs: BANDS.map(() => ({ x: 0, v: 0 })), pan: { x: 0, v: 0 }, quiet: { x: 1, v: 0 }, play: { x: 1, v: 0 },
+      head: 0.08, t: 0, tm: 0, last: 0, raf: 0, hist: [], bassEma: 0, onsetAt: -10, idle: 0, kickUntil: 0,
+      palA: lab, palB: lab, palT0: -10, outs: [0, 0, 0, 0], dest: new Float32Array(6),
+      fpsN: 0, fpsT: 0, visible: !document.hidden, onscreen: true, label: '',
+    };
+    this.applyCurve();
+    let ok = false;
+    try { ok = this.initGL(); } catch (e) { console.error(e); ok = false; }
+    if (!ok) { this.setState({ glFail: true }); return; }
+    this.ro = new ResizeObserver(() => this.resize());
+    this.ro.observe(this.canvasRef.current);
+    if (this.stageRef.current) {
+      this.io = new IntersectionObserver(([e]) => { this.eng.onscreen = e.isIntersecting; if (e.isIntersecting) this.kick(); else this.setLabel(false); }, { threshold: 0.02 });
+      this.io.observe(this.stageRef.current);
+    }
+    this.onVis = () => { this.eng.visible = !document.hidden; if (this.eng.visible) this.kick(); else this.setLabel(false); };
+    document.addEventListener('visibilitychange', this.onVis);
+    this.resize();
+    this.kick(2);
+    this.forceUpdate();
+  }
+  componentDidUpdate(prev) {
+    if (prev.curva !== this.props.curva && this.U) { this.applyCurve(); this.kick(); }
+    if (prev.estela !== this.props.estela) this.kick();
+  }
+  componentWillUnmount() {
+    if (this.eng && this.eng.raf) cancelAnimationFrame(this.eng.raf);
+    if (this.ro) this.ro.disconnect();
+    if (this.io) this.io.disconnect();
+    if (this.onVis) document.removeEventListener('visibilitychange', this.onVis);
+    clearTimeout(this.hideT);
+    if (this.rig) { this.rig.stopAll(); try { this.rig.ctx.close(); } catch (e) {} }
+  }
+  applyCurve() {
+    this.curveK = (this.props.curva ?? 'Bernoulli') === 'Gerono' ? 0 : 1;
+    this.U.set(buildLut(this.curveK).lut, 72);
+  }
+  initGL() {
+    const c = this.canvasRef.current;
+    if (!c) return false;
+    const gl = c.getContext('webgl2', { antialias: true, alpha: false, depth: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+    if (!gl) return false;
+    this.gl = gl;
+    this.progs = { dust: compileProgram(gl, 'dust'), glow: compileProgram(gl, 'glow'), ribbon: compileProgram(gl, 'ribbon'), streak: compileProgram(gl, 'streak') };
+    this.ubo = gl.createBuffer();
+    gl.bindBuffer(gl.UNIFORM_BUFFER, this.ubo);
+    gl.bufferData(gl.UNIFORM_BUFFER, this.U.byteLength, gl.DYNAMIC_DRAW);
+    gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, this.ubo);
+    for (const p of Object.values(this.progs)) { const i = gl.getUniformBlockIndex(p, 'Frame'); if (i !== gl.INVALID_INDEX) gl.uniformBlockBinding(p, i, 0); }
+    this.vao = gl.createVertexArray();
+    gl.bindVertexArray(this.vao);
+    return true;
+  }
+  resize() {
+    const c = this.canvasRef.current;
+    if (!c || !this.gl) return;
+    const r = c.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), s = this.state.scale / 100;
+    const w = Math.max(2, Math.round(r.width * dpr * s)), h = Math.max(2, Math.round(r.height * dpr * s));
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    this.kick(0.3);
+  }
+  kick(sec = 1.2) {
+    const E = this.eng;
+    if (!E || !this.gl) return;
+    E.kickUntil = Math.max(E.kickUntil, E.t + sec);
+    if (!E.raf && E.visible && E.onscreen) { E.last = 0; E.raf = requestAnimationFrame(this.frame); }
+  }
+  setLabel(running) {
+    const E = this.eng;
+    let txt, dot;
+    if (!E.visible || !E.onscreen) { txt = 'Fuera de vista · render detenido'; dot = '#6b7079'; }
+    else if (this.state.playing) { txt = 'Reproduciendo'; dot = '#bcc6d4'; }
+    else if (running) { txt = !this.state.pauseIdle ? 'Sin reproducción · respira' : E.idle < K.IDLE_S ? 'Sin reproducción' : 'Frenando'; dot = '#8a96a8'; }
+    else { txt = 'En reposo · render detenido'; dot = '#6b7079'; }
+    if (txt !== E.label) {
+      E.label = txt;
+      if (this.stateEl) this.stateEl.textContent = txt;
+      if (this.dotEl) this.dotEl.style.background = dot;
+      if (!running && this.hudEl) this.hudEl.textContent = `0 fps · detenido · ${this.canvasRef.current.width}×${this.canvasRef.current.height}`;
+    }
+  }
+  frame = (now) => {
+    const E = this.eng, gl = this.gl, U = this.U, S = this.state;
+    E.raf = 0;
+    if (!gl) return;
+    const ts = now / 1000;
+    const dt = E.last ? clamp(ts - E.last, 0.0005, 0.05) : 1 / 60;
+    E.last = ts; E.t += dt;
+    const playing = S.playing && !!this.rig;
+    const raw = playing ? this.rig.read(dt).slice() : ZERO4;
+    E.hist.push({ t: E.t, v: raw });
+    while (E.hist.length > 1 && E.hist[1].t <= E.t - K.LOOKAHEAD) E.hist.shift();
+    const del = E.hist[0].t <= E.t - K.LOOKAHEAD + 1e-6 ? E.hist[0].v : ZERO4;
+    if (playing && raw[0] - E.bassEma > 0.16 && raw[0] > 0.35 && E.t - E.onsetAt > 0.18) E.onsetAt = E.t;
+    E.bassEma += (raw[0] - E.bassEma) * (1 - Math.exp(-dt / 0.25));
+    const tau = E.t - E.onsetAt;
+    const dip = tau >= 0 && tau < K.LOOKAHEAD ? Math.pow(Math.sin((Math.PI * tau) / K.LOOKAHEAD), 2) : 0;
+    springStep(E.quiet, !playing || Math.max(del[0], del[1], del[2]) < 0.05 ? 1 : 0, OMEGA(K.QUIET_T90), dt);
+    const q = clamp(E.quiet.x, 0, 1);
+    for (let b = 0; b < 4; b++) {
+      const B = S.bands[b];
+      const x = b === 3 ? del[3] * (1 - q) : del[b];
+      const target = Math.pow(clamp(x * B.sens, 0, 1), B.gamma);
+      const sp = E.springs[b];
+      springStep(sp, target, OMEGA(Math.max(((target > sp.x ? B.att : B.rel) / 1000), 0.004)), dt);
+      E.outs[b] = b === 0 ? sp.x - K.ANTIC * dip : sp.x;
+    }
+    const d = E.dest;
+    d.fill(0);
+    for (let b = 0; b < 4; b++) { const B = S.bands[b]; for (const key of B.routes) { const j = DI[key]; d[j] += E.outs[b] * B.amp * DESTS[j].bound; } }
+    for (let j = 0; j < 6; j++) d[j] = clamp(d[j], DESTS[j].min, DESTS[j].bound);
+    if (playing) E.idle = 0; else E.idle += dt;
+    springStep(E.play, playing || !S.pauseIdle || E.idle < K.IDLE_S ? 1 : 0, OMEGA(K.STOP_T90), dt);
+    const p = clamp(E.play.x, 0, 1);
+    E.tm += dt * p;
+    E.head = (((E.head + (dt * (1 + d[1]) * (1 - K.QUIET_SLOW * q) * p) / K.LAP_S) % 1) + 1) % 1;
+    const breath = K.BREATH_A * q * p * (0.5 - 0.5 * Math.cos((TAU * E.tm) / K.BREATH_T));
+    const yaw = 0.055 * Math.sin((TAU * E.tm) / 16) * (0.35 + 0.65 * q);
+    const dx = 0.012 * Math.sin((TAU * E.tm) / 23) * (0.5 + 0.5 * q);
+    const dy = 0.008 * Math.sin((TAU * E.tm) / 17 + 1) * (0.5 + 0.5 * q);
+    const k = easeInOutCubic(clamp((E.t - E.palT0) / K.PAL_FADE, 0, 1));
+    const cw = this.canvasRef.current.width, ch = this.canvasRef.current.height;
+    const aspect = cw / ch, f = 1 / Math.tan((K.FOV_DEG * Math.PI) / 360);
+    const cssW = this.canvasRef.current.clientWidth || 1;
+    const occ = S.panelOpen && !S.chromeHidden ? Math.min(0.5, 336 / cssW) : 0;
+    springStep(E.pan, occ, OMEGA(0.5), dt);
+    const pan = clamp(E.pan.x, 0, 0.5);
+    const R = (aspect < 1 ? 0.82 : K.WIDTH_FRAC) * Math.min(1, (1 - pan) / 0.78) * aspect * K.CAM_D / f;
+    U[0] = E.outs[0]; U[1] = E.outs[1]; U[2] = E.outs[2]; U[3] = E.springs[3].x;
+    U[4] = d[0]; U[5] = d[2]; U[6] = d[3]; U[7] = d[4];
+    U[8] = d[5]; U[9] = q; U[10] = breath; U[11] = p;
+    U[12] = E.tm; U[13] = E.head; U[14] = k; U[15] = this.curveK;
+    U[16] = cw; U[17] = ch; U[18] = aspect; U[19] = R;
+    U[20] = K.CAM_D; U[21] = f; U[22] = K.TILT; U[23] = yaw;
+    U[24] = dx - pan; U[25] = dy; U[26] = K.NEAR; U[27] = K.FAR;
+    U[28] = E.palA.length; U[29] = E.palB.length; U[30] = K.SEGS; U[31] = this.props.estela ?? K.TRAIL;
+    for (let i = 0; i < 5; i++) {
+      const a = E.palA[i] || ZERO4, b = E.palB[i] || ZERO4;
+      U[32 + i * 4] = a[0]; U[33 + i * 4] = a[1]; U[34 + i * 4] = a[2]; U[35 + i * 4] = 0;
+      U[52 + i * 4] = b[0]; U[53 + i * 4] = b[1]; U[54 + i * 4] = b[2]; U[55 + i * 4] = 0;
+    }
+    gl.viewport(0, 0, cw, ch);
+    gl.clearColor(9 / 255, 9 / 255, 11 / 255, 1); gl.clearDepth(1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, this.ubo);
+    gl.bufferSubData(gl.UNIFORM_BUFFER, 0, U);
+    gl.bindVertexArray(this.vao);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(this.progs.dust); gl.drawArrays(gl.TRIANGLES, 0, K.DUST_N * 6);
+    gl.useProgram(this.progs.glow); gl.drawArrays(gl.TRIANGLE_STRIP, 0, K.SEGS * 2);
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(this.progs.ribbon); gl.drawArrays(gl.TRIANGLE_STRIP, 0, K.SEGS * 2);
+    gl.disable(gl.DEPTH_TEST); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(this.progs.streak); gl.drawArrays(gl.TRIANGLES, 0, 6);
+    for (let b = 0; b < 4; b++) { const el = this.meterEls[b]; if (el) el.style.transform = `scaleX(${clamp(E.outs[b], 0, 1).toFixed(3)})`; }
+    E.fpsN++;
+    if (E.t - E.fpsT >= 0.5) {
+      const fps = Math.round(E.fpsN / (E.t - E.fpsT));
+      if (this.hudEl) this.hudEl.textContent = `${fps} fps · ${cw}×${ch} · 4 draws · ${K.SEGS * 4 + K.DUST_N * 6 + 6} vért.`;
+      E.fpsN = 0; E.fpsT = E.t;
+    }
+    const settled = p < 0.002 && Math.abs(E.play.v) < 0.01 && k >= 1 && Math.abs(E.pan.x - occ) < 0.001 && E.springs.every((s) => Math.abs(s.x) < 0.003 && Math.abs(s.v) < 0.01);
+    const keep = E.visible && E.onscreen && (playing || !settled || E.t < E.kickUntil);
+    if (keep) E.raf = requestAnimationFrame(this.frame);
+    this.setLabel(keep);
+  };
+  setPalette(hexes) {
+    const E = this.eng;
+    if (!E) return;
+    const lab = hexes.map(hexToOklab);
+    const fading = E.t - E.palT0 < K.PAL_FADE;
+    if (fading && lab.length === E.palB.length) E.palB = lab;
+    else { E.palA = E.palB; E.palB = lab; E.palT0 = E.t; }
+    this.kick();
+  }
+  ensureRig() {
+    if (!this.rig) { try { this.rig = new AudioRig(); } catch (e) { this.setState({ err: 'Audio no disponible en este navegador' }); return null; } }
+    return this.rig;
+  }
+  togglePlay = async () => {
+    const r = this.ensureRig();
+    if (!r) return;
+    if (this.state.playing) {
+      this.setState({ playing: false, chromeHidden: false }, () => this.kick());
+      try { await r.ctx.suspend(); } catch (e) {}
+    } else {
+      try { await r.ctx.resume(); } catch (e) {}
+      if (!r.mode) r.startSynth();
+      this.eng.hist = [];
+      this.setState({ playing: true }, () => { this.kick(); this.onStageMove(); });
+    }
+  };
+  loadFile = async (file) => {
+    const r = this.ensureRig();
+    if (!r || !file) return;
+    this.setState({ loading: true, err: '' });
+    try {
+      await r.ctx.resume();
+      await r.playFile(file);
+      this.eng.hist = [];
+      this.setState({ source: 'file', fileName: file.name, playing: true, loading: false }, () => { this.kick(); this.onStageMove(); });
+    } catch (e) {
+      this.setState({ loading: false, err: 'No se pudo decodificar el archivo' });
+    }
+  };
+  backToSynth = async () => {
+    const r = this.ensureRig();
+    if (!r) return;
+    try { await r.ctx.resume(); } catch (e) {}
+    r.startSynth();
+    this.eng.hist = [];
+    this.setState({ source: 'synth', fileName: '', playing: true }, () => this.kick());
+  };
+  onStageMove = () => {
+    if (this.state.chromeHidden) this.setState({ chromeHidden: false }, () => this.kick());
+    clearTimeout(this.hideT);
+    this.hideT = setTimeout(() => {
+      if (this.state.playing && (this.props.autoOcultar ?? true) && !this.overPanel) this.setState({ chromeHidden: true }, () => this.kick());
+    }, 3000);
+  };
+  updPalette(palette, preset = null) {
+    this.setState({ palette, preset });
+    this.setPalette(palette);
+  }
+  updBands(fn) {
+    const bands = cloneBands(this.state.bands);
+    fn(bands);
+    this.setState({ bands, edited: true }, () => this.kick());
+  }
+
+  renderVals() {
+    const s = this.state;
+    const band = s.bands[s.sel];
+    const fmtRoute = (key) => {
+      const a = band.amp;
+      switch (key) {
+        case 'grosor': return `grosor ±${Math.round(15 * a)} %`;
+        case 'velocidad': return `velocidad +${Math.round(20 * a)} %`;
+        case 'torsion': return `torsión ${(0.6 * a).toFixed(2)} rad`;
+        case 'borde': return `borde +${Math.round(150 * a)} %`;
+        case 'color': return `color ${Math.round(50 * a)} % de la paleta`;
+        default: return `polvo ${Math.round(100 * a)} %`;
+      }
+    };
+    const setB = (field) => (e) => { const v = +e.target.value; this.updBands((b) => { b[s.sel][field] = v; }); };
+    const profileRows = [];
+    Object.values(PROFILES).forEach((pf) => pf.bands.forEach((b, i) => profileRows.push({
+      profile: i === 0 ? pf.name : '', band: BANDS[i].name,
+      routes: b.routes.length ? b.routes.map((r) => DESTS[DI[r]].short.toLowerCase()).join(', ') : '—',
+      sens: `×${b.sens.toFixed(2)}`, times: `${b.att} / ${b.rel} ms`, gamma: b.gamma.toFixed(1), amp: `${Math.round(b.amp * 100)} %`,
+      line: i === 0 ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.04)',
+    })));
+    const switchOn = s.pauseIdle;
+    return {
+      canvasRef: this.canvasRef, stageRef: this.stageRef, stateRef: this.stateRef, dotRef: this.dotRef, hudRef: this.hudRef,
+      glFail: s.glFail,
+      chromeOpacity: s.chromeHidden ? 0 : 1,
+      chromePE: s.chromeHidden ? 'none' : 'auto',
+      stageCursor: s.chromeHidden ? 'none' : 'default',
+      onStageMove: this.onStageMove,
+      onDragOver: (e) => e.preventDefault(),
+      onDrop: (e) => { e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) this.loadFile(f); },
+      playing: s.playing, notPlaying: !s.playing, playLabel: s.playing ? 'Pausar' : 'Reproducir',
+      togglePlay: this.togglePlay,
+      sourceTitle: s.loading ? 'Decodificando…' : s.source === 'file' ? s.fileName : 'Prueba sintética',
+      sourceSub: s.err ? s.err : s.source === 'file' ? 'Archivo local · en bucle · arrastra otro para cambiar' : 'Bombo · hi-hat · barrido de tono · 104 BPM · 16 compases',
+      isFile: s.source === 'file',
+      backToSynth: this.backToSynth,
+      onFile: (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) this.loadFile(f); },
+      panelOpen: s.panelOpen, panelClosed: !s.panelOpen,
+      openPanel: () => this.setState({ panelOpen: true }, () => this.kick()),
+      closePanel: () => this.setState({ panelOpen: false }, () => this.kick()),
+      panelEnter: () => { this.overPanel = true; },
+      panelLeave: () => { this.overPanel = false; },
+      countLabel: `${s.palette.length} / 5`,
+      swatches: s.palette.map((hex, i) => ({
+        hex, short: hex.slice(1).toUpperCase(), label: `Color ${i + 1}: ${hex}`, removeLabel: `Quitar el color ${i + 1}`,
+        canRemove: s.palette.length > 2,
+        onChange: (e) => { const p = s.palette.slice(); p[i] = e.target.value.toUpperCase(); this.updPalette(p); },
+        remove: () => { const p = s.palette.slice(); p.splice(i, 1); this.updPalette(p); },
+      })),
+      canAdd: s.palette.length < 5,
+      addSwatch: () => {
+        const a = hexToOklab(s.palette[s.palette.length - 1]), b = hexToOklab(s.palette[0]);
+        this.updPalette(s.palette.concat([oklabToHex([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2])]));
+      },
+      gradientCss: `linear-gradient(to right in oklab, ${s.palette.join(', ')})`,
+      presets: PRESETS.map((p) => {
+        const on = s.preset === p.key;
+        return { name: p.name, apply: () => this.updPalette(p.colors.slice(), p.key), bg: on ? 'rgba(255,255,255,.1)' : 'transparent', border: on ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.08)', color: on ? '#e8eaee' : '#99a0aa' };
+      }),
+      profiles: Object.entries(PROFILES).map(([key, pf]) => {
+        const on = s.profile === key;
+        return {
+          name: pf.name, checked: String(on), bg: on ? 'rgba(255,255,255,.1)' : 'transparent', shadow: on ? 'inset 0 0 0 1px rgba(255,255,255,.14)' : 'none', color: on ? '#e8eaee' : '#99a0aa',
+          apply: () => this.setState({ profile: key, edited: false, bands: cloneBands(pf.bands) }, () => this.kick()),
+        };
+      }),
+      profileDesc: PROFILES[s.profile].desc,
+      editedLabel: s.edited ? 'editado' : '',
+      destCols: DESTS.map((d) => ({ short: d.short })),
+      matrix: BANDS.map((b, i) => ({
+        name: b.name, selected: String(i === s.sel), select: () => this.setState({ sel: i }),
+        bg: i === s.sel ? 'rgba(255,255,255,.05)' : 'transparent', color: i === s.sel ? '#e8eaee' : '#99a0aa',
+        meterRef: this.meterRefs[i],
+        cells: DESTS.map((d) => {
+          const on = s.bands[i].routes.includes(d.key);
+          return {
+            on: String(on), label: `${b.name} → ${d.name}`, fill: on ? '#bcc6d4' : 'transparent', ring: on ? '#bcc6d4' : 'rgba(255,255,255,.22)',
+            toggle: () => this.updBands((bs) => { const r = bs[i].routes; const j = r.indexOf(d.key); if (j >= 0) r.splice(j, 1); else r.push(d.key); }),
+          };
+        }),
+      })),
+      bandTitle: BANDS[s.sel].name, bandRange: BANDS[s.sel].range,
+      sliders: [
+        { label: 'Sensibilidad', min: 0, max: 2, step: 0.01, value: band.sens, display: `×${band.sens.toFixed(2)}`, onChange: setB('sens') },
+        { label: 'Ataque', min: 1, max: 400, step: 1, value: band.att, display: `${band.att} ms`, onChange: setB('att') },
+        { label: 'Liberación', min: 20, max: 1500, step: 10, value: band.rel, display: `${band.rel} ms`, onChange: setB('rel') },
+        { label: 'Curva γ', min: 0.5, max: 3, step: 0.05, value: band.gamma, display: band.gamma.toFixed(2), onChange: setB('gamma') },
+        { label: 'Amplitud', min: 0, max: 1, step: 0.01, value: band.amp, display: `${Math.round(band.amp * 100)} %`, onChange: setB('amp') },
+      ],
+      ampNote: band.routes.length ? `Al máximo: ${band.routes.map(fmtRoute).join(' · ')}` : 'Sin destino: esta banda no mueve nada.',
+      scale: s.scale, scaleDisplay: `${s.scale} %`,
+      onScale: (e) => this.setState({ scale: +e.target.value }, () => this.resize()),
+      pauseIdleStr: String(switchOn),
+      togglePauseIdle: () => this.setState({ pauseIdle: !s.pauseIdle }, () => this.kick()),
+      switchBg: switchOn ? '#bcc6d4' : 'rgba(255,255,255,.12)', knobBg: switchOn ? '#0b0b0e' : '#99a0aa', knobX: switchOn ? 'translateX(12px)' : 'translateX(0)',
+      lenB: this.lens ? this.lens.b.toFixed(4) : '—', lenG: this.lens ? this.lens.g.toFixed(4) : '—',
+      destRows: DESTS.map((d) => ({ name: d.short === 'Veloc.' ? 'Velocidad' : d.short, uniform: d.uniform, range: d.range, use: d.use })),
+      profileRows,
+      layoutRows: LAYOUT.map(([name, type, off, desc]) => ({ name, type, offset: String(off), desc })),
+      constRows: [
+        ['SEGS', K.SEGS, 'segmentos de la tira; 2 vértices por segmento'],
+        ['TRAIL', `${K.TRAIL} vueltas`, 'longitud de la estela (prop «estela»)'],
+        ['LAP_S', `${K.LAP_S} s`, 'una vuelta a velocidad base'],
+        ['Z_AMP', K.Z_AMP, 'profundidad del cruce: z = Z_AMP · sin t'],
+        ['TILT', `${K.TILT} rad`, 'inclinación del plano sobre X (−24°)'],
+        ['FOV_Y · D · NEAR · FAR', `${K.FOV_DEG}° · ${K.CAM_D} · ${K.NEAR} · ${K.FAR}`, 'cámara casi ortográfica'],
+        ['WIDTH_FRAC', K.WIDTH_FRAC, 'ancho que ocupa la lemniscata (0.82 en vertical)'],
+        ['W0', K.W0, 'semiancho base, en unidades de curva'],
+        ['NIB_ANGLE · NIB_MIN', `${K.NIB_ANGLE} rad · ${K.NIB_MIN}`, 'ángulo y mínimo de la plumilla'],
+        ['TAIL · HEAD', `${K.TAIL} · ${K.HEAD}`, 'afinado de cola y cierre de cabeza, en v'],
+        ['TW', K.TW, 'semiancho del volteo en cada cruce, en vueltas'],
+        ['LOBE_TILT', `${K.LOBE_TILT} rad`, 'balanceo suave dentro de cada lóbulo'],
+        ['ECHO_ROT · ECHO_SCALE · ECHO_Z', `${K.ECHO_ROT} · ${K.ECHO_SCALE} · ${K.ECHO_Z}`, 'separación de las vueltas antiguas'],
+        ['GLOW_W · GLOW_I', `${K.GLOW_W} · ${K.GLOW_I}`, 'ancho e intensidad del halo aditivo'],
+        ['BACK_L · BACK_C · BACK_B', `${K.BACK_L} · ${K.BACK_C} · ${K.BACK_B}`, 'reverso en OKLab: luminosidad, croma, desvío frío'],
+        ['BREATH_A · BREATH_T', `${K.BREATH_A} · ${K.BREATH_T} s`, 'respiración del grosor en silencio'],
+        ['QUIET_SLOW · QUIET_T90', `${K.QUIET_SLOW} · ${K.QUIET_T90} s`, 'freno en silencio y tiempo de entrada'],
+        ['STOP_T90 · IDLE_S', `${K.STOP_T90} s · ${K.IDLE_S} s`, 'frenado al parar y espera antes de frenar'],
+        ['LOOKAHEAD · ANTIC', `${K.LOOKAHEAD * 1000} ms · ${K.ANTIC}`, 'adelanto del análisis y profundidad de la anticipación'],
+        ['PAL_FADE', `${K.PAL_FADE * 1000} ms`, 'fundido de paleta, easeInOutCubic'],
+        ['DUST_N · LUT_N', `${K.DUST_N} · ${K.LUT_N}`, 'motas de polvo y muestras de t(s)'],
+      ].map(([name, value, desc]) => ({ name, value: String(value), desc })),
+      wgslConsts: SHADER_CONSTS.map((n) => ({ name: n.padEnd(10, ' '), val: f1(K[n]) })),
+    };
+  }
+}
+</script>
+</body>
+</html>

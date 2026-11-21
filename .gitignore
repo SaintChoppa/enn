@@ -43,6 +43,6 @@ src-tauri/.cargo/
 skills-lock.json
 
 # ── Obsidian: disposición de ventanas de cada equipo y notas vacías ──
-.obsidian/workspace*.json
+**/.obsidian/workspace*.json
 Sin título*.canvas
 Sin título*.base
