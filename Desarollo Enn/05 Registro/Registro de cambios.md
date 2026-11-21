@@ -9,6 +9,10 @@ tags: [enn, registro, changelog]
 
 **Regla**: cada cambio que se haga en el proyecto añade aquí una línea con su fecha, **arriba del todo**. El formato es `- [área] qué cambió → dónde (commit o «sin commitear»)`. Las áreas son `audio`, `ui`, `motor`, `build`, `ci`, `docs`, `bóveda` y `git`. El detalle largo va en la nota del tema y aquí solo el enlace.
 
+## 2026-11-20
+
+- [git] A petición del propietario, todo lo local sube a GitHub (`SaintChoppa/enn`) en dos commits: el código de la beta 0.2 (sprints 1-3, `935187c`) y la bóveda (`eaf0d16`). Quedan fuera las carpetas de herramientas de IA (`.claude/`, `.agents/`, `skills-lock.json`), la disposición de ventanas de Obsidian y las notas vacías («Sin título…»), ahora en `.gitignore`. Se invita a **Zaphkl** como colaborador con permiso de escritura (pendiente de que acepte).
+
 ## 2026-11-17
 
 - [radio] **Revisión del Sprint 3 contra su diseño** (a petición del propietario): faltaban 8 puntos y ya están hechos → [[Pruebas - Sprint 3]]. Reintento cada hora sin conexión, tarjeta fuera del modo mini, limpieza semanal segura, año real en todas las pistas, búsquedas dentro de la canción (cuenta lo escuchado), volumen y lo reciente en la radio, y ADR #178. Prueba primero: 130 pruebas en Rust y 45 en la interfaz, en verde. Visto en la app real después (años, tarjeta en la 3.ª escucha, modo mini, limpieza, búsquedas). Al probar apareció un fallo más (escucha falsa al volver a poner la misma canción), ya corregido. 131 pruebas en Rust y 45 en la interfaz. Sin commitear.

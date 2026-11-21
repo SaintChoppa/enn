@@ -41,7 +41,6 @@ tags: [enn, kanban, seguimiento]
 - [ ] A ojo del propietario: el *feel* del cambio de modo y de las entradas; ¿la inactividad aplica en toda Simple o solo en «Reproduciendo»?
 - [ ] Documentar el sistema de botones por tokens y los estados de foco en [[Diseño - Sistema visual]]
 - [ ] La carpeta `C:\Users\hectr\Music` quedó casi vacía: confirmar si hay que volver a escanear la música
-- [ ] Git: decidir cuándo commitear (17 archivos modificados + 7 sin seguimiento) y hacer push de los 30 commits pendientes
 
 ## En curso
 
@@ -50,6 +49,7 @@ tags: [enn, kanban, seguimiento]
 ## Hecho
 
 **Complete**
+- [x] 2026-11-20 — Todo subido a GitHub (código y bóveda) y Zaphkl invitado como colaborador
 - [x] 2026-11-17 — **Beta 0.2 · Sprint 3 cerrado**: 91 % de la biblioteca con etiquetas reales, radio que sigue el hilo y lo explica, almacén de escuchas, tarjeta de recomendaciones ([[Pruebas - Sprint 3]])
 - [x] 2026-11-17 — **Beta 0.2 · Sprint 2 cerrado**: vista previa de 10 s, descargas en paralelo 2,55× más rápidas, yt-dlp al día solo y verificado, final animado, hallazgo n.º 3 cerrado ([[Pruebas - Sprint 2]])
 - [x] 2026-11-16 — **Beta 0.2 · Sprint 1 cerrado**: arranque −40 %, reposo 62 % → ~0,5 %, primer ▶ 140 ms, 0 cortes con carga ([[Pruebas - Sprint 1]])
