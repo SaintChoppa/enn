@@ -1666,7 +1666,11 @@ mod tests {
         let t = Instant::now();
         assert_eq!(s.take_timeout(Duration::from_millis(50)), None, "esperando");
         assert_eq!(s.take_timeout(Duration::from_millis(3000)), Some(2));
-        assert!(t.elapsed() >= Duration::from_millis(480), "{:?}", t.elapsed());
+        assert!(
+            t.elapsed() >= Duration::from_millis(480),
+            "{:?}",
+            t.elapsed()
+        );
     }
 
     #[test]
