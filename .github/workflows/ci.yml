@@ -33,6 +33,20 @@ jobs:
         with:
           node-version: 22
 
+      # Tauri exige que existan los sidecars (`externalBin`: yt-dlp y ffmpeg)
+      # para compilar, y build.rs solo los descarga en Windows (~100 MB). Las
+      # comprobaciones no los ejecutan (las pruebas con red van con #[ignore]),
+      # así que bastan archivos vacíos con el nombre del triple de cada equipo.
+      - name: Placeholder sidecars (yt-dlp, ffmpeg)
+        shell: bash
+        run: |
+          triple=$(rustc -vV | sed -n 's/^host: //p')
+          ext=""
+          if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          mkdir -p src-tauri/binaries
+          for b in yt-dlp ffmpeg; do touch "src-tauri/binaries/$b-$triple$ext"; done
+          ls -la src-tauri/binaries
+
       - name: Rust formatting
         working-directory: src-tauri
         run: cargo fmt --check
