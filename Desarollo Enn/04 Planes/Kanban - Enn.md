@@ -24,9 +24,6 @@ tags: [enn, kanban, seguimiento]
 - [ ] Beta 0.2 · Sprint 6 — Video de fondo ([[Sprint 6 - Video de fondo]])
 - [ ] Beta 0.2 · Sprint 7 — Estabilizar, empaquetar y lanzar ([[Sprint 7 - Beta]])
 - [ ] Auditoría de interfaz 2026-11-13 · ALTA: cajón del ecualizador cerrado enfocable con Tab (posible causa del +12 dB) → `inert` ([[Auditoría de interfaz 2026-11-13]])
-- [ ] Auditoría de interfaz 2026-11-13 · ALTA: el cambio a Simple puede quedarse colgado si las animaciones no terminan → tope de tiempo
-- [ ] Auditoría de interfaz 2026-11-13 · MEDIA: contraste bajo de rótulos (`--text-faint`) y texto de 7,5–9 px
-- [ ] Auditoría de interfaz 2026-11-13 · BAJA: objetivos pequeños, panel de pistas estrecho en Studio, coste de `markPlayingRow`
 - [ ] Logo: confirmar permiso o licencia del dibujo antes de publicar el repo (ADR #132)
 - [ ] Probar de oído la salida exclusiva tras la corrección del 2026-11-09 (archivos de 44,1 / 96 kHz)
 - [ ] Visualizador: revisión del propietario (difuminado, movimiento, sincronía del pulso con el golpe)
@@ -43,6 +40,13 @@ tags: [enn, kanban, seguimiento]
 - [ ] La carpeta `C:\Users\hectr\Music` quedó casi vacía: confirmar si hay que volver a escanear la música
 
 ## En curso
+
+- [ ] Zaphkl · [#1](https://github.com/SaintChoppa/enn/issues/1) Auditoría de memoria (~490 MB frente a 200 MB)
+- [ ] Zaphkl · [#2](https://github.com/SaintChoppa/enn/issues/2) Probar sin conexión
+- [ ] Zaphkl · [#3](https://github.com/SaintChoppa/enn/issues/3) Revisión visual de las animaciones de descarga
+- [ ] Zaphkl · [#4](https://github.com/SaintChoppa/enn/issues/4) Latencia de la vista previa en frío
+- [ ] Zaphkl · [#5](https://github.com/SaintChoppa/enn/issues/5) Revisión de código de los sprints 1–3
+- [ ] Zaphkl · [#6](https://github.com/SaintChoppa/enn/issues/6) Pendientes de la auditoría de interfaz
 
 
 

@@ -9,8 +9,17 @@ tags: [enn, registro, changelog]
 
 **Regla**: cada cambio que se haga en el proyecto añade aquí una línea con su fecha, **arriba del todo**. El formato es `- [área] qué cambió → dónde (commit o «sin commitear»)`. Las áreas son `audio`, `ui`, `motor`, `build`, `ci`, `docs`, `bóveda` y `git`. El detalle largo va en la nota del tema y aquí solo el enlace.
 
+## 2026-11-21
+
+- [git] Seis issues en GitHub para que Zaphkl audite y pruebe lo de los sprints 1–3, elegidas por el propietario: [#1](https://github.com/SaintChoppa/enn/issues/1) memoria, [#2](https://github.com/SaintChoppa/enn/issues/2) sin conexión, [#3](https://github.com/SaintChoppa/enn/issues/3) animaciones de descarga, [#4](https://github.com/SaintChoppa/enn/issues/4) latencia de la vista previa, [#5](https://github.com/SaintChoppa/enn/issues/5) revisión de código, [#6](https://github.com/SaintChoppa/enn/issues/6) pendientes de la auditoría de interfaz. Etiquetas nuevas: `auditoría`, `pruebas`, `sprint-1`, `sprint-2` y `sprint-3`. Sin asignar: Zaphkl aún no ha aceptado la invitación.
+
 ## 2026-11-20
 
+- [ci] **La CI de GitHub pasa por primera vez en Windows, Linux y macOS** (`2ff8f48`). Fallaba en los tres:
+  - Faltaban los ejecutables de yt-dlp y ffmpeg que Tauri exige para compilar; ahora se crean archivos vacíos en su lugar (`2cd2532`).
+  - El `cfg(windows)` de la salida exclusiva se había quedado encima de `mod enrich` desde el Sprint 3, así que `enrich` no existía fuera de Windows. Además había dos avisos de código sin usar fuera de Windows (`3cb0c87`).
+  - Un aviso nuevo de clippy en Rust 1.100 (`fad4813`).
+  - Una prueba de tiempos demasiado ajustada para la máquina de macOS (`835062f`).
 - [git] A petición del propietario, todo lo local sube a GitHub (`SaintChoppa/enn`) en dos commits: el código de la beta 0.2 (sprints 1-3, `935187c`) y la bóveda (`eaf0d16`). Quedan fuera las carpetas de herramientas de IA (`.claude/`, `.agents/`, `skills-lock.json`), la disposición de ventanas de Obsidian y las notas vacías («Sin título…»), ahora en `.gitignore`. Se invita a **Zaphkl** como colaborador con permiso de escritura (pendiente de que acepte).
 
 ## 2026-11-17
