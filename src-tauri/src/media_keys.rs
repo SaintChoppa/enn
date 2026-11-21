@@ -19,6 +19,8 @@ use crate::player::{log_msg, log_warn, Core, PlayState};
 const DBUS_NAME: &str = "enn";
 const DISPLAY_NAME: &str = "Enn";
 
+// fuera de Windows no hace falta la ventana (hwnd): `app` y `mut` sobran
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables, unused_mut))]
 fn create_controls(app: &tauri::AppHandle) -> Result<MediaControls, String> {
     let mut config = PlatformConfig {
         dbus_name: DBUS_NAME,

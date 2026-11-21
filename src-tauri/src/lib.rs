@@ -5,8 +5,9 @@ mod art;
 mod decode;
 mod downloader;
 mod dsp;
-#[cfg(target_os = "windows")]
 mod enrich;
+// la salida exclusiva (WASAPI) solo existe en Windows
+#[cfg(target_os = "windows")]
 mod exclusive;
 mod features;
 mod fsutil;

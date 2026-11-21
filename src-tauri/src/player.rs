@@ -1217,6 +1217,7 @@ impl Player {
     /// Recuerda (también entre sesiones) que la exclusiva falló en `dev_setting`.
     /// Se guarda el NOMBRE REAL del dispositivo: si el predeterminado de
     /// Windows cambia (otro altavoz, se desinstala FxSound…), se vuelve a probar.
+    #[cfg(target_os = "windows")]
     fn remember_exclusive_failure(&self, dev_setting: &Option<String>) {
         let Some(name) = resolved_output_name(dev_setting) else {
             return;
@@ -1294,10 +1295,10 @@ impl Player {
         // dispositivo no acepta formatos exclusivos, recae en compartido.
         // Solo existe en Windows (WASAPI); en otras plataformas cae directo
         // a la salida compartida de abajo (cpal), sin intentar abrir nada.
-        let dev_now = self.device_name.lock().unwrap().clone();
         if self.exclusive_on() && !self.exclusive_known_bad() {
             #[cfg(target_os = "windows")]
             {
+                let dev_now = self.device_name.lock().unwrap().clone();
                 let want_rate = self.desired_rate.lock().unwrap().unwrap_or(48000);
                 let (ok_tx, ok_rx) = crossbeam_channel::bounded::<Result<(), String>>(1);
                 let (kill_tx, kill_rx) = crossbeam_channel::bounded::<()>(1);
