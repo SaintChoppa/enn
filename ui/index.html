@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="fonts/fonts.css" />
   <link rel="stylesheet" href="tw-output.css" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="motion.css" />
 </head>
 <body data-mode="simple" data-view="nowplaying">
   <!-- Iconos: un único sprite, trazo a currentColor para que sigan al tema -->
@@ -529,6 +530,22 @@
             <option value="5000">Tras 5 s</option>
             <option value="10000">Tras 10 s</option>
             <option value="0">Nunca</option>
+          </select>
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">Rebote</span>
+          <select id="set-feel" aria-label="Cuánto rebotan las animaciones">
+            <option value="suave">Suave (casi sin rebote)</option>
+            <option value="medio">Medio</option>
+            <option value="elastico">Elástico</option>
+          </select>
+        </div>
+        <div class="sd-row">
+          <span class="sd-label">Animaciones</span>
+          <select id="set-motion" aria-label="Nivel de animación">
+            <option value="completas">Completas</option>
+            <option value="suaves">Suaves (más cortas, sin rebote)</option>
+            <option value="minimas">Mínimas</option>
           </select>
         </div>
         <label class="sd-check" title="Enn se abre al iniciar sesión en Windows, escondido en la bandeja (junto al reloj)">

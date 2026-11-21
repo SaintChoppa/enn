@@ -7,7 +7,7 @@ import globals from "globals";
 export default [
   js.configs.recommended,
   {
-    files: ["ui/app.js", "ui/palette.js", "ui/search.js", "ui/select.js", "ui/prefs.js", "ui/motion.js", "ui/perf.js", "ui/dl-anim.js", "ui/reco.js", "ui/viz/*.js"],
+    files: ["ui/app.js", "ui/palette.js", "ui/search.js", "ui/select.js", "ui/prefs.js", "ui/motion.js", "ui/perf.js", "ui/dl-anim.js", "ui/reco.js", "ui/lab.js", "ui/wave.js", "ui/modeswitch.js", "ui/viz/*.js"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",

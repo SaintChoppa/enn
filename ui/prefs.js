@@ -44,7 +44,9 @@ export const PREFS_SCHEMA = [
   { id: "radio.on", type: "toggle", default: false, section: "radio", since: "0.1", legacy: "enn.radio" },
   { id: "repeat.mode", type: "choice", default: 0, options: [0, 1, 2], section: "repeat", since: "0.1", legacy: "enn.modes", fromLegacy: legacyJson("r") },
   { id: "downloads.format", type: "choice", default: "m4a", options: ["m4a", "mp3", "flac"], section: "downloads", since: "0.1", legacy: "enn.dlFmt" },
-  { id: "motion.level", type: "choice", default: "completas", options: ["completas", "suaves", "minimas"], section: "motion", since: "0.2" },
+  { id: "motion.level", type: "choice", default: "completas", options: ["completas", "suaves", "minimas"], section: "motion", since: "0.2", legacy: "enn.motionLevel" },
+  // Sprint 4: cuánto rebota la app (por defecto «suave», elegido en el laboratorio)
+  { id: "motion.feel", type: "choice", default: "suave", options: ["suave", "medio", "elastico"], section: "motion", since: "0.2", legacy: "enn.motionFeel" },
 ];
 
 const NO_VALIDO = Symbol("no-valido");

@@ -1,7 +1,7 @@
 ---
 resumen: Sprint 4 de la beta 0.2. Animación elástica en toda la app, ninguna acción instantánea, cambio de color global en olas con origen según la causa, y transición Simple ↔ Studio rehecha con elementos compartidos.
-estado: propuesto
-actualizado: 2026-11-15
+estado: hecho, falta la revisión a mano del propietario
+actualizado: 2026-11-21
 tags: [enn, beta, sprint, animacion]
 ---
 
@@ -133,9 +133,9 @@ Elementos con nombre de transición propio: carátula, título y artista, botone
 
 ## Hecho cuando
 
-- [ ] Carácter por defecto elegido en el laboratorio
-- [ ] Barrido completo aplicado; ningún cambio de estado visible es instantáneo
-- [ ] Ola de color con origen según la causa
-- [ ] Transición Simple ↔ Studio nueva y sin cuelgues
-- [ ] Hallazgo n.º 2 de la auditoría cerrado
-- [ ] Resultados en `05 Registro/Pruebas - Sprint 4.md`
+- [x] Carácter por defecto elegido en el laboratorio
+- [x] Barrido completo aplicado; ningún cambio de estado visible es instantáneo (salvo lo que debe serlo: el cambio de modo con teclado y, en Mínimas, el movimiento)
+- [x] Ola de color con origen según la causa
+- [x] Transición Simple ↔ Studio nueva y sin cuelgues
+- [x] Hallazgo n.º 2 de la auditoría cerrado
+- [x] Resultados en [[Pruebas - Sprint 4]]

@@ -10,7 +10,7 @@ tags: [enn, kanban, seguimiento]
 
 ## Por hacer
 
-- [ ] Beta 0.2 · Memoria: ~490 MB (objetivo 200 MB). Decidir objetivo realista o dedicarle trabajo; pregunta al abrir el Sprint 4 ([[Pruebas - Sprint 1]])
+- [ ] Beta 0.2 · Memoria: ~490 MB (objetivo 200 MB). Aplazado por el propietario (2026-11-21): «primero hagamos y luego pensamos en ahorrar» ([[Pruebas - Sprint 1]], issue #1)
 - [ ] Beta 0.2 · Medir CPU con la ventana cerrada a la bandeja de verdad y CPU sonando en Simple
 - [ ] Beta 0.2 · Vista previa en frío tarda 4–6 s (objetivo < 4 s): ¿resolver más resultados de antemano? Pregunta al propietario ([[Pruebas - Sprint 2]])
 - [ ] Beta 0.2 · Revisión del propietario del *feel* de las descargas (llenado, «finalizando», anillos de la vista previa)
@@ -18,8 +18,9 @@ tags: [enn, kanban, seguimiento]
 - [ ] Beta 0.2 · Radio: 30 minutos con la biblioteca real apuntando los saltos que chirrían (objetivo ≤ 1 de cada 15) ([[Pruebas - Sprint 3]])
 - [ ] Beta 0.2 · Etiquetas: «Pop latino» abarca casi todo el urbano en español (Deezer solo dice «Latin Music»). ¿Last.fm o reglas por artista? Pregunta al propietario
 - [ ] Beta 0.2 · Etiquetas: K-pop y títulos con mucho ruido sin etiquetas (10 de 111); limpiar más el título (Sprint 7)
-- [ ] Beta 0.2 · Escuchas: con crossfade, la interfaz no avisa del inicio de la siguiente (Sprint 4)
-- [ ] Beta 0.2 · Sprint 4 — Movimiento: animación elástica, ola de color, Simple ↔ Studio ([[Sprint 4 - Movimiento]])
+- [ ] Beta 0.2 · Motor: con la salida exclusiva, el crossfade no encadena la pista cebada (la interfaz la vuelve a empezar). La parte de la interfaz (contar la nueva como empezada) ya está, sin ver en marcha ([[Pruebas - Sprint 4]])
+- [ ] Beta 0.2 · Sprint 4: revisión a mano del movimiento por el propietario (tacto en su monitor, a velocidad normal y a cámara lenta; y al día siguiente)
+- [ ] Beta 0.2 · Rendimiento: tarea de 71–93 ms en la primera entrada a Studio de cada sesión ([[Pruebas - Sprint 4]])
 - [ ] Beta 0.2 · Sprint 5 — Personalización: panel y destello de bordes ([[Sprint 5 - Personalización]])
 - [ ] Beta 0.2 · Sprint 6 — Video de fondo ([[Sprint 6 - Video de fondo]])
 - [ ] Beta 0.2 · Sprint 7 — Estabilizar, empaquetar y lanzar ([[Sprint 7 - Beta]])
@@ -41,6 +42,7 @@ tags: [enn, kanban, seguimiento]
 
 ## En curso
 
+
 - [ ] Zaphkl · [#1](https://github.com/SaintChoppa/enn/issues/1) Auditoría de memoria (~490 MB frente a 200 MB)
 - [ ] Zaphkl · [#2](https://github.com/SaintChoppa/enn/issues/2) Probar sin conexión
 - [ ] Zaphkl · [#3](https://github.com/SaintChoppa/enn/issues/3) Revisión visual de las animaciones de descarga
@@ -53,6 +55,7 @@ tags: [enn, kanban, seguimiento]
 ## Hecho
 
 **Complete**
+- [x] 2026-11-21 — **Beta 0.2 · Sprint 4 hecho** (falta la revisión a mano del propietario): rebote «suave» configurable, movimiento en controles y listas, ola de color según la causa, Simple ↔ Studio con elementos compartidos y sin cuelgues (auditoría n.º 2), Mínimas sin desplazamientos; percentil 95 de 5–10 ms a 1366×768 ([[Pruebas - Sprint 4]])
 - [x] 2026-11-20 — Todo subido a GitHub (código y bóveda) y Zaphkl invitado como colaborador
 - [x] 2026-11-17 — **Beta 0.2 · Sprint 3 cerrado**: 91 % de la biblioteca con etiquetas reales, radio que sigue el hilo y lo explica, almacén de escuchas, tarjeta de recomendaciones ([[Pruebas - Sprint 3]])
 - [x] 2026-11-17 — **Beta 0.2 · Sprint 2 cerrado**: vista previa de 10 s, descargas en paralelo 2,55× más rápidas, yt-dlp al día solo y verificado, final animado, hallazgo n.º 3 cerrado ([[Pruebas - Sprint 2]])

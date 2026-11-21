@@ -47,6 +47,7 @@ tags: [enn, auditoria, interfaz, accesibilidad]
 
 - **Síntoma**: `leaveStudio()` espera a `animation.finished` de los paneles de Studio antes de cambiar de modo. Con la línea de tiempo de animaciones parada (ventana oculta o minimizada; se reprodujo en el navegador de pruebas con el panel oculto) esas promesas no se cumplen y el modo se queda en Studio, con `modeAnimating = true`, hasta que la ventana vuelve a verse.
 - **Arreglo propuesto**: un tope de tiempo (≈ 700 ms) con `Promise.race`: si las animaciones no terminan, el modo cambia igual.
+- **Cerrado (2026-11-21, Sprint 4 T6).** `leaveStudio()` y `modeAnimating` ya no existen. El cambio de modo va por `ui/modeswitch.js`: una View Transition cuyo callback cambia el modo, con la ventana oculta se cambia al instante, y un tope de 900 ms fuerza el cambio si la transición se cuelga. Pruebas en `ui/tests/modeswitch.test.js`.
 
 ## 3. 🟠 Descargas que terminan con el panel cerrado
 

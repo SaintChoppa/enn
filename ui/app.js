@@ -1,13 +1,49 @@
-import { applyFromArt, resetPalette } from "./palette.js";
+import { applyPalette, extractPalette, SILVER } from "./palette.js";
+import { createWave } from "./wave.js";
+import { createModeSwitch } from "./modeswitch.js";
 import { initViz } from "./viz/index.js";
 import { initSearch } from "./search.js";
 import { summarize as dlSummarize, fmtSpeed } from "./dl-anim.js";
 import { createRecoGate, mountRecoCard } from "./reco.js";
 import { initSelects, openSelect } from "./select.js";
 import { mark as perfMark, idleProbe, report as perfReport } from "./perf.js";
+import {
+  feelOf, setFeel, setMotionLevel, motionLevel, syncStill, spring, originFor, rollText, whenDone,
+  occurrenceKeys, measureFlip, playFlip, staggerDelay, tabDir,
+} from "./motion.js";
+
+// Sprint 4: carácter (cuánto rebota) y nivel de animación, antes del primer
+// pintado para que nada arranque con la curva equivocada.
+(() => {
+  let feel = null;
+  let level = null;
+  try {
+    feel = localStorage.getItem("enn.motionFeel");
+    level = localStorage.getItem("enn.motionLevel");
+  } catch {}
+  setFeel(feel);
+  setMotionLevel(level);
+  // «reducir movimiento» de Windows puede cambiar con Enn abierto
+  try {
+    window.matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", () => syncStill());
+  } catch {}
+})();
+
+/// Sprint 4, T7: ¿nivel efectivo Mínimas (elegido o por «reducir movimiento»)?
+/// Sustituye a las constantes que solo miraban Windows al arrancar. Con él,
+/// lo que solo se mueve (deslizar un valor, el salto de un botón) no se anima;
+/// lo que aparece o se va lo resuelve spring() con un fundido.
+function still() {
+  return motionLevel() === "minimas";
+}
 
 // medición del arranque (T1): el módulo se evalúa con el DOM ya leído
 perfMark("dom");
+// Sprint 4: la ventana entra con un fundido y una escala mínima, no de golpe
+{
+  const root = document.getElementById("app");
+  if (root) spring(root, [{ opacity: 0, transform: "scale(0.985)" }, { opacity: 1, transform: "none" }], "snappy");
+}
 requestAnimationFrame(() => perfMark("primera-pintura"));
 
 // todos los desplegables con el estilo de la app (los nativos de Windows
@@ -71,7 +107,17 @@ const SVG = {
 
 function iconSet(id, key) {
   const n = $(id);
-  if (n) n.innerHTML = SVG[key];
+  if (!n) return;
+  const morph = id === "btn-play" && n.dataset.icon && n.dataset.icon !== key;
+  n.dataset.icon = key;
+  n.innerHTML = SVG[key];
+  // Sprint 4: ▶ ↔ ⏸ se transforma en vez de sustituirse de golpe
+  if (morph && n.firstElementChild) {
+    spring(n.firstElementChild, [
+      { transform: `scale(0.6) rotate(${key === "pause" ? -30 : 30}deg)`, opacity: 0.2 },
+      { transform: "none", opacity: 1 },
+    ], "snappy", { duration: 120 });
+  }
 }
 function iconSetMode(id, key, label) {
   const n = $(id);
@@ -525,12 +571,10 @@ function queuePointerUp(e) {
     if (d.target !== d.from) moveQueueItem(from, to);
     else { d.rows.forEach((r) => { r.style.transform = ""; }); d.li.classList.remove("q-drop"); }
   };
-  if (REDUCE_MOTION_Q) finish();
+  if (still()) finish();
   else setTimeout(finish, 220);
 }
 
-const REDUCE_MOTION_Q =
-  !!window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 el.queue.addEventListener("pointerdown", queuePointerDown);
 
@@ -540,7 +584,7 @@ el.queue.addEventListener("pointerdown", queuePointerDown);
 /// suman al destino. Si se arrastra la barra de desplazamiento o el contenido
 /// cambia, se re-sincroniza y no pelea con ello.
 function smoothWheel(box) {
-  if (!box || REDUCE_MOTION_Q) return;
+  if (!box || still()) return;
   let target = 0, pos = 0, raf = 0, last = 0;
   const stop = () => { cancelAnimationFrame(raf); raf = 0; };
   const step = (now) => {
@@ -580,13 +624,21 @@ function renderQueue() {
     qDrag = null;
     el.queue.classList.remove("q-dragging");
   }
+  // Sprint 4: foto antes de repintar; después cada fila viaja desde su sitio
+  // viejo, la nueva entra y la quitada se encoge (FLIP). Sin esperas.
+  const before = measureFlip(el.queue);
   el.queue.innerHTML = "";
   // las elecciones de la radio no son de la cola: no se enseñan
+  const shown = [];
+  for (let i = curIdx + 1; i < session.length; i++) if (!session[i].radio) shown.push(i);
+  const keys = occurrenceKeys(shown.map((i) => session[i].path));
   let n = 0;
-  for (let i = curIdx + 1; i < session.length; i++) {
-    if (session[i].radio) continue;
-    el.queue.appendChild(queueRowEl(session[i], ++n, i));
+  for (const i of shown) {
+    const li = queueRowEl(session[i], ++n, i);
+    li.dataset.flip = keys[n - 1];
+    el.queue.appendChild(li);
   }
+  playFlip(el.queue, before);
   el.queueTitle.textContent = queueLabel();
   el.queueHint.style.display = n ? "none" : "";
 }
@@ -606,6 +658,9 @@ let previewOn = false;
 let repeatCycles = 0; // ciclos seguidos en «repetir una»
 function playAtManual(i) {
   manualNext = true;
+  // a mano: desde el punto del clic, salvo que quien llama ya puso su causa
+  // (recomendaciones, Descargas)
+  if (!waveCause || performance.now() - waveCause.t > 200) nextWave("click", true);
   return playAt(i);
 }
 function insightsEvent(kind, path, extra = {}) {
@@ -834,7 +889,29 @@ function removeAt(i) {
   markPlayingRow();
 }
 
+/// Sprint 4, T8 (tablero, pendiente del Sprint 3): con crossfade el motor pasa
+/// solo a la pista cebada y la cola avanza sin onEnded ni playAt, así que la
+/// canción que terminaba no contaba como completa y la nueva no contaba como
+/// empezada (escuchas, historial, tarjeta de recomendación, radio). Aquí se hace
+/// lo mismo que en un final normal seguido de playAt.
+function crossfadeStarted(track) {
+  if (!track || !track.path) return;
+  if (started && !started.ended) {
+    started.ended = true;
+    insightsEvent("end", started.path);
+  }
+  repeatCycles = 0;
+  insightsEvent("start", track.path, { dur: track.dur ?? null, manual: false });
+  started = { path: track.path, ended: false };
+  manualNext = false;
+  recoReset(track.path);
+  recordHistory(track);
+  ensureRadioAhead();
+  invoke("dbg_log", { msg: `XFADE: empieza ${track.path.split(/[\\/]/).pop()}` }).catch(() => {});
+}
+
 async function onEnded() {
+  nextWave("ended");
   if (started && !started.ended) {
     started.ended = true;
     insightsEvent("end", started.path);
@@ -940,6 +1017,7 @@ function radioOrSoon() {
 }
 
 async function nextManual() {
+  nextWave("next");
   if (radioOn) return radioOrSoon();
   if (!session.length) return;
   playAt((curIdx + 1 + session.length) % session.length);
@@ -952,6 +1030,7 @@ function prevManual() {
     invoke("seek_to", { seconds: 0 });
     return;
   }
+  nextWave("prev");
   playAt((curIdx - 1 + session.length) % session.length);
 }
 
@@ -1004,7 +1083,7 @@ document.addEventListener("click", (e) => {
   if (!b) return;
   requestAnimationFrame(() => {
     const on = b.classList.contains("active") || b.getAttribute("aria-expanded") === "true" || b.getAttribute("aria-pressed") === "true";
-    if (!on || REDUCE_MOTION) return;
+    if (!on || still()) return;
     b.classList.remove("pop");
     void b.offsetWidth;
     b.classList.add("pop");
@@ -1128,13 +1207,19 @@ function makeLibRow(track, i, opts = {}) {
   fav.addEventListener("click", async (e) => {
     e.stopPropagation();
     const next = !track.favorite;
+    const paintFav = (on) => {
+      track.favorite = on;
+      fav.classList.toggle("on", on);
+      fav.textContent = on ? "★" : "☆";
+      fav.title = on ? "Quitar de favoritos" : "Marcar como favorita";
+    };
+    // Sprint 4: la estrella cambia ya y da un salto (la acción no espera)
+    paintFav(next);
+    if (next) spring(fav, [{ transform: "scale(0.55)" }, { transform: "scale(1)" }], "elastic");
     try {
       await invoke("lib_set_favorite", { path: track.path, favorite: next });
-      track.favorite = next;
-      fav.classList.toggle("on", next);
-      fav.textContent = next ? "★" : "☆";
-      fav.title = next ? "Quitar de favoritos" : "Marcar como favorita";
     } catch (err) {
+      paintFav(!next);
       toast(`No se pudo actualizar favorito: ${err}`);
     }
   });
@@ -1308,10 +1393,52 @@ function paintLayouts() {
 }
 function setLibLayout(v) {
   if (!LIB_LAYOUTS.includes(v) || v === libLayout) return;
+  const from = libLayout;
   libLayout = v;
   try { localStorage.setItem("enn.libLayout", v); } catch {}
+  // Sprint 4: foto de las carátulas visibles antes de cambiar…
+  const arts = from === "wheel" || v === "wheel" ? null : artRects();
   el.libList.scrollTop = 0;
   renderLib();
+  // …y cada una viaja (con su tamaño) a su sitio nuevo; el texto se funde
+  if (!arts) {
+    spring(el.libList, [{ opacity: 0 }, { opacity: 1 }], "snappy", { duration: 160 });
+    return;
+  }
+  for (const [path, { rect, node }] of artRects()) {
+    const old = arts.get(path);
+    const li = node.closest("li");
+    if (!old) {
+      if (li) spring(li, [{ opacity: 0 }, { opacity: 1 }], "snappy", { duration: 160 });
+      continue;
+    }
+    const dx = old.rect.left - rect.left;
+    const dy = old.rect.top - rect.top;
+    const sx = old.rect.width / rect.width;
+    const sy = old.rect.height / rect.height;
+    spring(node, [
+      { transformOrigin: "top left", transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+      { transformOrigin: "top left", transform: "none" },
+    ], "snappy");
+    for (const c of li ? li.children : []) {
+      if (c !== node) spring(c, [{ opacity: 0 }, { opacity: 1 }], "snappy", { duration: 160 });
+    }
+  }
+}
+
+/// Carátulas visibles de la biblioteca (máx. 40): ruta → { rect, node }.
+function artRects() {
+  const out = new Map();
+  if (!el.libList.offsetParent || document.visibilityState === "hidden") return out;
+  const box = el.libList.getBoundingClientRect();
+  for (const node of el.libList.querySelectorAll(":scope > li > .trk-art")) {
+    const r = node.getBoundingClientRect();
+    if (r.top > box.bottom || r.bottom < box.top || !r.width) continue;
+    const p = node.parentElement.dataset.path;
+    if (p) out.set(p, { rect: r, node });
+    if (out.size >= 40) break;
+  }
+  return out;
 }
 if (layoutBox) {
   layoutBox.addEventListener("click", (e) => {
@@ -1465,6 +1592,24 @@ function renderLib() {
     renderFlat();
   }
   updateLibMeta();
+  libFirstEntrance();
+}
+
+/// Sprint 4: la primera vez que la biblioteca se ve, sus filas visibles entran
+/// escalonadas (40 ms). Solo una vez por sesión y nunca al desplazarse.
+let libEntered = false;
+function libFirstEntrance() {
+  if (libEntered || !el.libList || !el.libList.offsetParent || !library.length) return;
+  libEntered = true;
+  const box = el.libList.getBoundingClientRect();
+  let i = 0;
+  for (const li of el.libList.children) {
+    const r = li.getBoundingClientRect();
+    if (r.top > box.bottom) break;
+    const delay = staggerDelay(i++);
+    if (delay === null) break;
+    spring(li, [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], "snappy", { delay, fill: "backwards" });
+  }
 }
 
 // ---- vista "Álbumes": rejilla de carátulas con carga diferida
@@ -2027,6 +2172,7 @@ function openLibraryForSearch() {
 // ---- pestañas de vista
 function setView(v) {
   const changed = v !== view;
+  const prevView = view;
   view = v;
   for (const id of ["tab-all", "tab-artist", "tab-genre", "tab-year", "tab-albums", "tab-playlist", "tab-activity"]) {
     document.getElementById(id).classList.toggle("active", id === `tab-${v}`);
@@ -2038,17 +2184,13 @@ function setView(v) {
   if (v !== "artist") openArtist = null;
   // pequeño crossfade al cambiar de pestaña: sin esto el contenido de la
   // lista se reemplazaba de golpe, se sentía más "página recargada" que app
+  // Sprint 4: el contenido nuevo entra desde el lado de la pestaña elegida
+  // (orden del menú lateral), en vez del fundido a negro de antes
+  renderLib();
   if (changed && el.libList) {
-    el.libList.style.opacity = "0";
-    requestAnimationFrame(() => {
-      try {
-        renderLib();
-      } finally {
-        requestAnimationFrame(() => { el.libList.style.opacity = "1"; });
-      }
-    });
-  } else {
-    renderLib();
+    const order = [...document.querySelectorAll(".nav-item")].map((n) => n.dataset.nav);
+    const d = tabDir(order, prevView, v);
+    spring(el.libList, [{ opacity: 0, transform: `translateX(${d * 14}px)` }, { opacity: 1, transform: "none" }], "snappy");
   }
 }
 document.getElementById("tab-all").addEventListener("click", () => setView("all"));
@@ -3008,9 +3150,16 @@ function setNowPlayingArt(uri) {
   const ph = document.getElementById("np-placeholder");
   if (!img || !ph) return;
   if (uri) {
+    // Sprint 4: la carátula nueva se funde (nunca salta), ya decodificada
+    const changed = img.getAttribute("src") !== uri;
     img.src = uri;
     img.classList.remove("hidden");
     ph.classList.add("hidden");
+    if (changed) {
+      const fade = () => spring(img, [{ opacity: 0, transform: "scale(0.985)" }, { opacity: 1, transform: "none" }], "snappy", { duration: 200 });
+      if (img.decode) img.decode().then(fade, () => {});
+      else fade();
+    }
   } else {
     img.classList.add("hidden");
     ph.classList.remove("hidden");
@@ -3019,8 +3168,14 @@ function setNowPlayingArt(uri) {
 function setNowPlayingText(title, artist) {
   const t = document.getElementById("np-title");
   const a = document.getElementById("np-artist");
-  if (t) t.textContent = title || "—";
-  if (a) a.textContent = artist || "";
+  // Sprint 4: el texto nuevo entra con un fundido corto (es de lo frecuente)
+  const put = (n, txt) => {
+    if (!n || n.textContent === txt) return;
+    n.textContent = txt;
+    spring(n, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], "snappy", { duration: 160 });
+  };
+  put(t, title || "—");
+  put(a, artist || "");
   paintKicker();
 }
 
@@ -3170,7 +3325,7 @@ function followTrackVolume() {
   volAnim = 0;
   // si la estás moviendo tú, no se la quita de la mano
   const box = el.volume.closest(".vol");
-  if (from === to || REDUCE_MOTION || (box && box.classList.contains("active"))) return paintVolume(to);
+  if (from === to || still() || (box && box.classList.contains("active"))) return paintVolume(to);
   const t0 = performance.now(), T = 900;
   const step = (now) => {
     const k = Math.min(1, (now - t0) / T);
@@ -3205,7 +3360,7 @@ let seekAnim = 0;
   el.seek.addEventListener("pointerup", (e) => {
     const start = from;
     from = null;
-    if (start === null || Math.abs(e.clientX - x0) > 4 || REDUCE_MOTION || !duration) return;
+    if (start === null || Math.abs(e.clientX - x0) > 4 || still() || !duration) return;
     const to = Number(el.seek.value);
     if (Math.abs(to - start) < 8) return;
     const t0 = performance.now(), T = 460;
@@ -3253,6 +3408,98 @@ function updatePlayBtn() {
 let lastTitle = "";
 let lastArtPath = null;
 
+// ---------------------------------------------------------------- ola de color (Sprint 4, T5)
+// Cada cambio de paleta pasa por wave.js. Quien provoca el cambio de canción
+// apunta la causa (⏭, ⏮, un clic…) y setMiniArt la gasta al llegar la carátula.
+const wave = createWave({
+  doc: document,
+  apply: applyPalette,
+  keyOf: (p) => `${p.accent}|${p.accent2}|${p.grey ? 1 : 0}`,
+  initial: SILVER,
+  now: () => performance.now(),
+  context: waveContext,
+  mini: () => document.body.classList.contains("mini"),
+  level: () => motionLevel(),
+  busy: () => document.documentElement.classList.contains("mode-vt") || document.documentElement.classList.contains("mode-fade"),
+  storage: {
+    get: () => localStorage.getItem("enn.waveSlow"),
+    set: (v) => localStorage.setItem("enn.waveSlow", v),
+  },
+  // primeras olas de la sesión: tiempo por fotograma al registro de depuración
+  report: ({ n, cause, avg, p95, max, at, frames }) => {
+    const f = (x) => x.toFixed(1);
+    const t1 = performance.now();
+    invoke("dbg_log", { msg: `WAVE #${n} ${cause}: avg ${f(avg)} ms, p95 ${f(p95)} ms, max ${f(max)} ms (frame ${at}/${frames}), ${longIn(t1 - avg * frames, t1)}, vp ${innerWidth}x${innerHeight}` }).catch(() => {});
+  },
+});
+
+// ---------------------------------------------------------------- medidas (Sprint 4, T8)
+// Tareas largas (> 50 ms) del hilo principal, para los informes de la ola y
+// del cambio de modo en el registro de depuración. Solo se guardan las últimas.
+const longTasks = [];
+try {
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) longTasks.push({ start: e.startTime, dur: e.duration });
+    if (longTasks.length > 100) longTasks.splice(0, longTasks.length - 100);
+  }).observe({ type: "longtask", buffered: true });
+} catch {}
+/// «long N (max X ms)» de las tareas largas que empezaron entre t0 y t1.
+function longIn(t0, t1) {
+  const hit = longTasks.filter((t) => t.start >= t0 - 1 && t.start <= t1);
+  return `long ${hit.length}${hit.length ? ` (max ${Math.round(Math.max(...hit.map((t) => t.dur)))} ms)` : ""}`;
+}
+/// Media, percentil 95 y máximo de una lista de huecos entre fotogramas.
+function frameStats(gaps) {
+  const sorted = [...gaps].sort((a, b) => a - b);
+  return {
+    avg: gaps.reduce((a, b) => a + b, 0) / gaps.length,
+    p95: sorted[Math.floor(sorted.length * 0.95)],
+    max: sorted[sorted.length - 1],
+  };
+}
+
+/// Centro de un nodo que se ve, o undefined.
+function centerOf(node) {
+  if (!node || !node.offsetParent) return undefined;
+  const r = node.getBoundingClientRect();
+  return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : undefined;
+}
+function waveContext() {
+  const art = centerOf(document.getElementById("np-art")) ?? centerOf(el.miniArt);
+  return { w: window.innerWidth, h: window.innerHeight, art, radio: centerOf($("btn-radio")) };
+}
+
+// último puntero (para «desde el punto del clic»)
+let lastPointer = null;
+document.addEventListener("pointerdown", (e) => { lastPointer = { x: e.clientX, y: e.clientY, t: performance.now() }; }, true);
+
+/// Apunta la causa del próximo cambio de color. Caduca a los 5 s: si la
+/// canción no llega a cambiar (⏭ con una sola), no se queda para la siguiente.
+let waveCause = null;
+function nextWave(cause, withPoint = false) {
+  const point = withPoint && lastPointer && performance.now() - lastPointer.t < 1500 ? { x: lastPointer.x, y: lastPointer.y } : null;
+  waveCause = { cause: withPoint && !point ? "other" : cause, point, t: performance.now() };
+}
+function takeWave() {
+  const c = waveCause && performance.now() - waveCause.t < 5000 ? waveCause : null;
+  waveCause = null;
+  // lo que eligió la radio sale de su botón (salvo que se pidiera a mano)
+  const cur = curIdx >= 0 ? session[curIdx] : null;
+  if (cur && cur.radio && (!c || c.cause === "ended")) return { cause: "radio" };
+  return c ?? { cause: "other" };
+}
+
+/// Color de la carátula `uri` con su ola. Si mientras se extrae cambió la
+/// canción o se pausó, no se aplica (llegaría tarde y taparía la buena).
+async function paintFromArt(uri, cause) {
+  const p = await extractPalette(uri);
+  if (lastArtUri !== uri || !playing) return;
+  wave.change(p, cause);
+}
+function paintSilver(cause) {
+  wave.change(SILVER, cause);
+}
+
 async function setMiniArt(path) {
   let uri = artCache.get(path);
   if (uri === undefined) {
@@ -3276,8 +3523,9 @@ async function setMiniArt(path) {
   // se queda en su plateado (syncPalette).
   lastArtUri = uri || null;
   paletteSilver = !(uri && playing);
-  if (uri && playing) applyFromArt(uri);
-  else resetPalette();
+  const cause = takeWave();
+  if (uri && playing) paintFromArt(uri, cause);
+  else paintSilver(cause);
 }
 
 /// Color de la canción solo mientras suena; en pausa o parada, plateado.
@@ -3286,10 +3534,11 @@ let paletteSilver = true;
 function syncPalette() {
   if (!playing && !paletteSilver) {
     paletteSilver = true;
-    resetPalette();
+    // pausa: el color se retira hacia la carátula
+    paintSilver({ cause: "pause" });
   } else if (playing && paletteSilver && lastArtUri) {
     paletteSilver = false;
-    applyFromArt(lastArtUri);
+    paintFromArt(lastArtUri, { cause: "resume" });
   }
 }
 
@@ -3299,7 +3548,7 @@ function hideMiniArt() {
   paletteSilver = true;
   el.miniArt.classList.add("hidden");
   setNowPlayingArt(null);
-  resetPalette();
+  paintSilver({ cause: "other" });
 }
 
 // muestra formato/tasa de muestreo/profundidad (o tasa de bits aproximada si
@@ -3731,7 +3980,10 @@ const search = initSearch({
   toast,
   startUrlDownload: startDownload,
   inLibrary: (title, artist) => inLibrarySong(title, artist),
-  playPath: (path) => playPathNow(path),
+  playPath: (path) => {
+    nextWave("download", true);
+    return playPathNow(path);
+  },
   enqueuePath: (path) => enqueuePath(path),
   downloadDir: () => invoke("get_download_dir"),
   downloadFmt: () => (document.getElementById("dl-fmt") || {}).value || "m4a",
@@ -3842,7 +4094,7 @@ function paintDlSummary() {
   const badge = $("dl-badge");
   if (badge) {
     badge.hidden = sum.left === 0;
-    $("dl-badge-n").textContent = String(sum.left);
+    rollText($("dl-badge-n"), String(sum.left));
     badge.style.setProperty("--p", (sum.pct / 100).toFixed(3));
     el.dlBtn.title = sum.left
       ? `Descargando: ${sum.left} ${sum.left === 1 ? "canción" : "canciones"}`
@@ -3918,11 +4170,31 @@ const ctxEl = $("ctx");
 const propsEl = $("props");
 
 function closeCtx() {
-  ctxEl.classList.add("hidden");
-  ctxEl.innerHTML = "";
+  if (ctxEl.classList.contains("hidden") || ctxEl._closing) return;
+  ctxEl._open?.cancel();
+  ctxEl._closing = spring(
+    ctxEl,
+    [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.97)" }],
+    "snappy",
+    { duration: 110, easing: "ease-in", fill: "forwards" },
+  );
+  const a = ctxEl._closing;
+  whenDone(a, 110, () => {
+    if (ctxEl._closing !== a) return;
+    ctxEl._closing = null;
+    ctxEl.classList.add("hidden");
+    ctxEl.innerHTML = "";
+    a.cancel();
+  });
 }
 
 function openCtx(x, y, items) {
+  // abrir otro a mitad de la salida del anterior: se corta la salida
+  if (ctxEl._closing) {
+    const a = ctxEl._closing;
+    ctxEl._closing = null;
+    a.cancel();
+  }
   ctxEl.innerHTML = "";
   for (const it of items) {
     if (it === "-") {
@@ -3947,6 +4219,8 @@ function openCtx(x, y, items) {
   const vy = Math.max(4, Math.min(y, window.innerHeight - r.height - 8));
   ctxEl.style.left = vx + "px";
   ctxEl.style.top = vy + "px";
+  ctxEl.style.transformOrigin = originFor({ x, y }, { left: vx, top: vy, width: r.width, height: r.height });
+  ctxEl._open = spring(ctxEl, [{ opacity: 0, transform: "scale(0.96)" }, { opacity: 1, transform: "none" }], "snappy");
 }
 
 document.addEventListener("click", closeCtx);
@@ -4324,6 +4598,10 @@ document.addEventListener("keydown", (e) => {
   // subía el deslizador un paso; mantenerla pulsada lo llevaba a +12 dB.
   const tag = e.target.tagName;
   if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
+  // Sprint 4, T8: si un control ya usó la tecla (el selector Simple/Studio, el
+  // de vista de la biblioteca…), no es un atajo. Antes ← → en el selector de
+  // modo cambiaban de modo Y de canción (con nada cargado, arrancaba la radio).
+  if (e.defaultPrevented) return;
   if (e.code === "Space") { e.preventDefault(); invoke("toggle_pause"); }
   else if (e.code === "ArrowRight") nextManual();
   else if (e.code === "ArrowLeft") prevManual();
@@ -4637,26 +4915,18 @@ function syncShell() {
 // escalonado es de 45 ms. Con «reduced motion» se mantiene la opacidad y se
 // quita el desplazamiento.
 // ==========================================================================
-const REDUCE_MOTION =
-  !!window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const ROW_MS = 200; // duración de una fila
 const ROW_STAGGER = 45; // escalonado entre filas
 const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
-
-/// Filas propias de Studio: todo lo que en Simple desaparece con el modo.
-function studioRows() {
-  return Array.from(document.querySelectorAll(".studio-only"));
-}
 
 /// Entrada (`show`) o salida de una fila desde la derecha. Devuelve la
 /// animación para poder esperar a que termine.
 function rowAnim(node, i, show, axis = "x") {
   if (node._rowAnim) node._rowAnim.cancel();
-  const d = REDUCE_MOTION ? 0 : 14;
-  const shift = d ? `translate${axis.toUpperCase()}(${d}px) scale(0.98)` : "none";
+  const shift = `translate${axis.toUpperCase()}(14px) scale(0.98)`;
   const from = show ? { opacity: 0, transform: shift } : { opacity: 1, transform: "none" };
   const to = show ? { opacity: 1, transform: "none" } : { opacity: 0, transform: shift };
-  const a = node.animate([from, to], {
+  const a = spring(node, [from, to], "snappy", {
     duration: ROW_MS,
     delay: Math.min(i, 5) * ROW_STAGGER,
     easing: EASE_OUT,
@@ -4672,10 +4942,12 @@ function rowAnim(node, i, show, axis = "x") {
 /// Gesto suelto (estado vacío, aviso): opacidad + un movimiento pequeño.
 function popAnim(node, { from = "up" } = {}) {
   if (node._popAnim) node._popAnim.cancel();
-  const d = REDUCE_MOTION || from === "none" ? 0 : 8;
+  const d = from === "none" ? 0 : 8;
   const sm = d ? `translateY(${from === "up" ? d : -d}px) scale(0.98)` : "none";
-  node._popAnim = node.animate(
+  node._popAnim = spring(
+    node,
     [{ opacity: 0, transform: sm }, { opacity: 1, transform: "none" }],
+    "snappy",
     { duration: ROW_MS, easing: EASE_OUT, fill: "backwards" },
   );
 }
@@ -4780,7 +5052,7 @@ function centerOnIdle(on) {
   const dy = window.innerHeight / 2 - (r.top + r.height / 2);
   const dx = window.innerWidth / 2 - (r.left + r.width / 2);
   block.classList.add("np-centered");
-  block.style.transform = REDUCE_MOTION ? "" : `translate(${Math.round(dx)}px, ${Math.round(dy)}px)`;
+  block.style.transform = still() ? "" : `translate(${Math.round(dx)}px, ${Math.round(dy)}px)`;
 }
 window.addEventListener("resize", () => { if (document.body.dataset.idle === "1") centerOnIdle(true); });
 
@@ -4828,6 +5100,7 @@ function goView(v, tab) {
   shell.view = v;
   syncShell();
   if (v !== was && (v === "library" || v === "downloads")) panelIn(v);
+  if (v === "library") libFirstEntrance();
   if (v === "downloads") {
     refreshDlTarget();
     syncDlTasks();
@@ -4842,9 +5115,11 @@ const PANEL_OF = { library: "view-library", downloads: "view-downloads" };
 
 function panelIn(v) {
   const node = $(PANEL_OF[v]);
-  if (!node || REDUCE_MOTION) return;
-  node.animate(
+  if (!node) return;
+  spring(
+    node,
     [{ opacity: 0, transform: "translateX(24px) scale(0.99)" }, { opacity: 1, transform: "none" }],
+    "snappy",
     { duration: 260, easing: EASE_OUT },
   );
 }
@@ -4854,12 +5129,14 @@ function panelIn(v) {
 function closePanel(v) {
   const node = $(PANEL_OF[v]);
   const done = () => goView("nowplaying");
-  if (!node || REDUCE_MOTION) return done();
-  const a = node.animate(
+  if (!node) return done();
+  const a = spring(
+    node,
     [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(24px) scale(0.99)" }],
+    "snappy",
     { duration: 170, easing: EASE_OUT, fill: "forwards" },
   );
-  a.onfinish = () => { done(); a.cancel(); };
+  whenDone(a, 170, () => { done(); a.cancel(); });
 }
 
 for (const [v, id] of Object.entries(PANEL_OF)) {
@@ -4875,151 +5152,122 @@ for (const [v, id] of Object.entries(PANEL_OF)) {
   node.prepend(b);
 }
 
-// La salida de Studio es simétrica a la entrada: los paneles propios se van
-// por donde entraron y, cuando terminan, el modo se pliega y la portada viaja
-// al centro. `modeAnimating` evita que una segunda pulsación dispare dos
-// transiciones a la vez.
-let modeAnimating = false;
+// ---------------------------------------------------------------- Simple ↔ Studio (Sprint 4, T6)
+// modeswitch.js envuelve el cambio en una View Transition: las piezas que
+// existen en los dos modos viajan a su sitio nuevo y las de Studio entran por
+// su lado (styles.css). El modo cambia siempre, a lo sumo a los 900 ms, y
+// pulsar el otro modo a mitad invierte desde donde esté. Sustituye a la salida
+// con promesas que, con la ventana oculta, dejaba Enn en Studio (auditoría n.º 2).
 
-const MODE_MOVE_MS = 420; // movimiento en pantalla: ease-in-out
-const EASE_IN_OUT = "cubic-bezier(0.77, 0, 0.175, 1)";
-
-/// De qué lado entra/sale cada panel propio de Studio.
-function studioSide(node) {
-  if (node.id === "stage-eq" || node.id === "studio-telemetry") return { axis: "Y", d: -18 };
-  if (node.closest && node.closest("#rail")) return { axis: "X", d: 28 };
-  return { axis: "X", d: 18 };
-}
-
-function sideAnim(node, i, show) {
-  if (node._rowAnim) node._rowAnim.cancel();
-  const { axis, d } = studioSide(node);
-  const shift = REDUCE_MOTION ? "none" : `translate${axis}(${d}px) scale(0.98)`;
-  const off = { opacity: 0, transform: shift };
-  const on = { opacity: 1, transform: "none" };
-  const a = node.animate(show ? [off, on] : [on, off], {
-    duration: show ? 260 : 170,
-    delay: show ? Math.min(i, 5) * ROW_STAGGER : 0,
-    easing: EASE_OUT,
-    fill: show ? "backwards" : "forwards",
-  });
-  node._rowAnim = a;
-  a.onfinish = () => { if (show) node._rowAnim = null; };
-  return a;
-}
-
-/// La portada de «Reproduciendo» es el mismo nodo en los dos modos: se mide
-/// antes y después del cambio y se anima la diferencia (FLIP).
-function npArt() {
-  return document.querySelector("#now-playing .np-art-wrap");
-}
-function flipNowPlaying(first) {
-  const a = npArt();
-  if (!a || !first || REDUCE_MOTION) return;
-  const last = a.getBoundingClientRect();
-  if (!last.width || !first.width) return;
-  const dx = first.left - last.left, dy = first.top - last.top, s = first.width / last.width;
-  if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(s - 1) < 0.01) return;
-  a.animate(
-    [
-      { transformOrigin: "top left", transform: `translate(${dx}px, ${dy}px) scale(${s})` },
-      { transformOrigin: "top left", transform: "none" },
-    ],
-    { duration: MODE_MOVE_MS, easing: EASE_IN_OUT },
-  );
-}
-function studioPanels() {
-  return [...studioRows(), $("rail")].filter((n) => n && n.offsetParent !== null);
-}
-
-/// Descargas sigue abierta al cambiar de modo (petición del propietario,
-/// 2026-11-13): antes, al pasar a Simple, se cerraba. El panel viaja de su
-/// sitio viejo al nuevo (FLIP) con un rebote suave.
-function flipPanel(node, first) {
-  if (!node || !first || REDUCE_MOTION) return;
-  const last = node.getBoundingClientRect();
-  if (!last.width || !last.height) return;
-  const dx = first.left - last.left;
-  const dy = first.top - last.top;
-  const sx = first.width / last.width;
-  const sy = first.height / last.height;
-  if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sx - 1) < 0.01 && Math.abs(sy - 1) < 0.01) return;
-  const spring = getComputedStyle(document.documentElement).getPropertyValue("--ease-spring").trim() || EASE_OUT;
-  node.animate(
-    [
-      { transformOrigin: "top left", transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
-      { transformOrigin: "top left", transform: "none" },
-    ],
-    { duration: 620, easing: spring },
-  );
-}
-const dlPanelRect = () => {
-  const n = $("view-downloads");
-  if (!n || shell.view !== "downloads") return null;
-  const r = n.getBoundingClientRect();
-  return r.width && r.height ? r : null;
-};
-
-function leaveStudio() {
-  modeAnimating = true;
-  const rows = studioPanels();
-  const anims = rows.map((n, i) => sideAnim(n, i, false));
-  const done = anims.length
-    ? Promise.all(anims.map((a) => a.finished.catch(() => {})))
-    : Promise.resolve();
-  done.then(() => {
-    // se retira el relleno de la salida y se pliega el modo
-    rows.forEach((n) => {
-      if (n._rowAnim) {
-        n._rowAnim.cancel();
-        n._rowAnim = null;
-      }
-    });
-    const first = npArt() && npArt().getBoundingClientRect();
-    const dlFirst = dlPanelRect();
-    shell.mode = "simple";
-    // Descargas se queda abierta; lo demás vuelve al inicio de Simple
-    if (shell.view !== "downloads") shell.view = "nowplaying";
-    modeAnimating = false;
-    applyRailWidth();
-    syncShell();
-    refreshTelemetry();
-    flipNowPlaying(first);
-    flipPanel($("view-downloads"), dlFirst);
-    animateQueueIn();
-  });
-}
-
-function setMode(m, opts = {}) {
-  if (m === shell.mode || modeAnimating) return;
-  const animate = opts.animate !== false;
-  // Simple: la cola se muda a la portada; si venimos de Studio, salida animada
+/// Cambio de modo en el DOM, síncrono (lo llama la transición o, con
+/// teclado, directamente).
+function applyMode(m) {
+  shell.mode = m;
+  // cada modo tiene su inicio: Simple la portada grande, Studio la biblioteca.
+  // Descargas sigue abierta al cambiar (petición del propietario, 2026-11-13).
   if (m === "simple") {
-    if (animate && shell.mode === "studio") return leaveStudio();
-    shell.mode = "simple";
     if (shell.view !== "downloads") shell.view = "nowplaying";
-    applyRailWidth();
-    syncShell();
-    refreshTelemetry();
-    if (animate) animateQueueIn();
-    return;
+  } else if (shell.view === "nowplaying") {
+    shell.view = "library";
   }
-  // cada modo tiene su inicio: Simple la portada grande, Studio la biblioteca
-  const first = npArt() && npArt().getBoundingClientRect();
-  const dlFirst = dlPanelRect();
-  shell.mode = "studio";
-  if (shell.view === "nowplaying") shell.view = "library";
   // Studio necesita una columna derecha donde el ecualizador quepa de verdad
   applyRailWidth();
   syncShell();
   refreshTelemetry();
-  // entrada de los paneles de Studio, cada uno desde su lado, y la portada
-  // viaja del centro a su columna (se hace ya sincrónica, sin parpadeo)
-  if (animate) {
-    flipNowPlaying(first);
-    studioPanels().forEach((n, i) => sideAnim(n, i, true));
-    flipPanel($("view-downloads"), dlFirst);
+}
+
+const modeSwitch = createModeSwitch({
+  doc: document,
+  apply: applyMode,
+  current: () => shell.mode,
+  level: () => motionLevel(),
+  // dentro de un cajón cerrado o de un panel plegado no se ve, aunque se pinte
+  visible: (n) => {
+    if (n.offsetParent === null || n.closest('[data-open="0"], .collapsed, [inert]')) return false;
+    const r = n.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+  },
+});
+
+function setMode(m, opts = {}) {
+  const kind = modeSwitch.go(m, opts);
+  // también sin animación (teclado): así se ve qué cuesta el modo en sí
+  if (["move", "fade", "instant"].includes(kind) && modeProbes < 10) probeMode(modeProbes++, kind, m);
+}
+
+/// Los 10 primeros cambios de modo animados de cada sesión dejan en el registro
+/// de depuración cuánto duraron y su tiempo por fotograma (Sprint 4, T8).
+let modeProbes = 0;
+function probeMode(n, kind, to) {
+  if (typeof requestAnimationFrame !== "function") return;
+  const t0 = performance.now();
+  const gaps = [];
+  let prev = 0;
+  const step = (t) => {
+    if (prev) gaps.push(t - prev);
+    prev = t;
+    const more = kind === "instant" ? performance.now() - t0 < 400 : modeSwitch.active() && performance.now() - t0 < 2000;
+    if (more) requestAnimationFrame(step);
+    else done();
+  };
+  requestAnimationFrame(step);
+  function done() {
+    const t1 = performance.now();
+    if (gaps.length < 3) return;
+    const { avg, p95, max } = frameStats(gaps);
+    const f = (x) => x.toFixed(1);
+    invoke("dbg_log", { msg: `MODE #${n} ${kind} -> ${to}: ${Math.round(t1 - t0)} ms, avg ${f(avg)} ms, p95 ${f(p95)} ms, max ${f(max)} ms (${gaps.length} frames), ${longIn(t0, t1)}, vp ${innerWidth}x${innerHeight}` }).catch(() => {});
   }
+}
+
+// Clics durante una View Transition (ola de color o cambio de modo). Chromium
+// manda todos los eventos del puntero a <html> mientras dura, aunque
+// `::view-transition` tenga `pointer-events: none` (comprobado en WebView2,
+// Chrome 156). Sin esto, un segundo ⏭ en el segundo que dura la ola se perdía.
+//   - Sobre el otro botón de modo, a mitad de un cambio: se invierte.
+//   - En cualquier otro sitio: la transición termina ya (saltarla devuelve el
+//     clic a la página en el acto) y el clic se reenvía a lo que hay debajo.
+const VT_CLASSES = ".wave-on, .mode-vt, .mode-fade";
+let vtPress = null;
+function inRect(node, e) {
+  if (!node) return false;
+  const r = node.getBoundingClientRect();
+  return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+}
+window.addEventListener("pointerdown", (e) => {
+  const root = document.documentElement;
+  if (e.target !== root || !root.matches(VT_CLASSES)) return;
+  if (modeSwitch.active()) {
+    for (const m of ["simple", "studio"]) {
+      if (inRect($(`mode-${m}`), e)) {
+        setMode(m);
+        vtPress = null;
+        return;
+      }
+    }
+  }
+  wave.skip();
+  modeSwitch.skip();
+  const t = document.elementFromPoint(e.clientX, e.clientY);
+  vtPress = t && t !== root ? { t, at: performance.now() } : null;
+}, true);
+// el clic que empezó sobre <html> también acaba en <html>: se lleva a su sitio
+for (const type of ["click", "dblclick"]) {
+  window.addEventListener(type, (e) => {
+    const p = vtPress;
+    if (!p || e.target !== document.documentElement) return;
+    if (performance.now() - p.at > 800) {
+      vtPress = null;
+      return;
+    }
+    e.stopImmediatePropagation();
+    p.t.dispatchEvent(new MouseEvent(type, {
+      bubbles: true, cancelable: true, composed: true, view: window, detail: e.detail,
+      clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY,
+      button: e.button, buttons: e.buttons, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
+    }));
+    if (type === "dblclick") vtPress = null;
+  }, true);
 }
 
 for (const n of document.querySelectorAll(".nav-item")) {
@@ -5311,6 +5559,7 @@ async function init() {
         markPlayingRow();
         followTrackVolume();
         ensureLoudness(session[curIdx]);
+        crossfadeStarted(session[curIdx]);
       }
     }
 
@@ -5460,16 +5709,19 @@ async function playSmoke() {
     if (dlg.open) return;
     refreshDlTarget(); // la carpeta de descargas vive aquí ahora (ADR #103)
     dlg.showModal();
-    if (!REDUCE_MOTION) {
-      dlg.animate([{ opacity: 0, transform: "scale(0.96)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: EASE_OUT });
-    }
+    spring(dlg, [{ opacity: 0, transform: "scale(0.96)" }, { opacity: 1, transform: "none" }], "bouncy");
+    try {
+      dlg.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: "ease-out", pseudoElement: "::backdrop" });
+    } catch {}
   };
   const hide = () => {
     if (!dlg.open || dlg._closing) return;
-    if (REDUCE_MOTION) { dlg.close(); return; }
     dlg._closing = true;
-    const a = dlg.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.97)" }], { duration: 150, easing: EASE_OUT, fill: "forwards" });
-    a.onfinish = () => { dlg.close(); a.cancel(); dlg._closing = false; };
+    const a = spring(dlg, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.97)" }], "snappy", { duration: 150, easing: EASE_OUT, fill: "forwards" });
+    try {
+      dlg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, easing: "ease-in", fill: "forwards", pseudoElement: "::backdrop" });
+    } catch {}
+    whenDone(a, 150, () => { dlg.close(); a.cancel(); dlg._closing = false; });
   };
   openBtn.addEventListener("click", show);
   if (closeBtn) closeBtn.addEventListener("click", hide);
@@ -5491,6 +5743,25 @@ async function playSmoke() {
         if (sm.value === "last") localStorage.removeItem("enn.startMode");
         else localStorage.setItem("enn.startMode", sm.value);
       } catch {}
+    });
+  }
+  // Interfaz → «Rebote» y «Animaciones» (Sprint 4). Se aplican al momento.
+  const feelSel = $("set-feel");
+  if (feelSel) {
+    feelSel.value = feelOf();
+    feelSel.addEventListener("change", () => {
+      setFeel(feelSel.value);
+      try { localStorage.setItem("enn.motionFeel", feelSel.value); } catch {}
+    });
+    // el laboratorio también lo cambia: se refleja al reabrir Ajustes
+    openBtn.addEventListener("click", () => { feelSel.value = feelOf(); });
+  }
+  const motionSel = $("set-motion");
+  if (motionSel) {
+    motionSel.value = document.documentElement.dataset.motion || "completas";
+    motionSel.addEventListener("change", () => {
+      setMotionLevel(motionSel.value);
+      try { localStorage.setItem("enn.motionLevel", motionSel.value); } catch {}
     });
   }
   // Interfaz → «Reproduciendo»
@@ -5543,7 +5814,10 @@ function recoReset(path) {
 }
 const recoCard = mountRecoCard({
   onPlayNext: (t) => playNext(t),
-  onPlayNow: (t) => playNowKeepingQueue(t),
+  onPlayNow: (t) => {
+    nextWave("reco");
+    return playNowKeepingQueue(t);
+  },
   onAddAll: (list) => {
     for (const t of [...list].reverse()) playNext(t);
     toast(list.length > 1 ? `${list.length} canciones a continuación` : "A continuación");
@@ -5651,10 +5925,21 @@ async function recoStep(s) {
     pop.appendChild(row);
   }
   document.body.appendChild(pop);
-  const close = () => { pop.hidden = true; };
+  const close = () => {
+    if (pop.hidden || pop._closing) return;
+    const a = spring(pop, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.97)" }], "snappy", { duration: 120, easing: "ease-in", fill: "forwards" });
+    pop._closing = a;
+    whenDone(a, 120, () => {
+      if (pop._closing !== a) return;
+      pop._closing = null;
+      pop.hidden = true;
+      a.cancel();
+    });
+  };
   rb.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     paint();
+    if (pop._closing) { pop._closing.cancel(); pop._closing = null; }
     pop.hidden = false;
     const r = rb.getBoundingClientRect();
     const w = pop.offsetWidth || 260;
@@ -5662,6 +5947,7 @@ async function recoStep(s) {
     // encima del botón si cabe; si no, debajo
     const above = r.top - pop.offsetHeight - 10;
     pop.style.top = `${above >= 8 ? above : Math.min(window.innerHeight - pop.offsetHeight - 8, r.bottom + 10)}px`;
+    pop.style.transformOrigin = above >= 8 ? "bottom center" : "top center";
   });
   document.addEventListener("pointerdown", (e) => { if (!pop.hidden && !pop.contains(e.target) && e.target !== rb) close(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) close(); });
@@ -5804,3 +6090,28 @@ init();
 
 
 
+
+// ---------------------------------------------------------------- laboratorio de movimiento
+// Sprint 4, T1: Ctrl+Alt+Mayús+M abre el laboratorio en una capa (iframe con
+// ui/lab.html). Solo para elegir el carácter; no existe hasta que se abre y
+// se destruye al cerrarlo.
+(function motionLab() {
+  let frame = null;
+  const close = () => {
+    if (!frame) return;
+    frame.remove();
+    frame = null;
+  };
+  document.addEventListener("enn:lab-close", close);
+  document.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey && e.altKey && e.shiftKey && e.code === "KeyM")) return;
+    e.preventDefault();
+    if (frame) return close();
+    frame = document.createElement("iframe");
+    frame.id = "motion-lab";
+    frame.title = "Laboratorio de movimiento";
+    frame.src = "lab.html";
+    document.body.appendChild(frame);
+    frame.addEventListener("load", () => frame && frame.focus());
+  });
+})();
