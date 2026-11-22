@@ -172,7 +172,12 @@ pub struct CurrentTrack {
     /// Ganancia a la que se acerca `gain_lin` poco a poco (normalización que
     /// llega a mitad de canción): sin saltos audibles (2026-11-12).
     pub gain_target: f32,
-    pub fade_secs: f32,
+    /// Fundido de entrada: el Fade que había al cargar la pista. No cambia
+    /// después (cambiarlo a mitad del fundido sería un salto de volumen).
+    pub fade_in_secs: f32,
+    /// Fundido de salida y ventana de crossfade. Sigue al ajuste de Fade
+    /// mientras la pista no haya llegado a su tramo final (`Core::set_fade`).
+    pub fade_out_secs: f32,
     /// tasa de bits media aproximada (tamaño en disco ÷ duración), calculada
     /// UNA vez al cargar la pista para no repetir `fs::metadata` en cada sondeo
     pub bitrate_kbps: Option<u32>,
@@ -344,7 +349,8 @@ impl Core {
             pos_sec: 0.0,
             gain_lin: gain,
             gain_target: gain,
-            fade_secs: self.fade_secs.max(0.0),
+            fade_in_secs: self.fade_secs.max(0.0),
+            fade_out_secs: self.fade_secs.max(0.0),
             bitrate_kbps,
         };
         match pipe {
@@ -531,6 +537,11 @@ impl Core {
         (t.pos_sec - self.delay_frames as f64 / self.out_rate.max(1) as f64).max(0.0)
     }
 
+    /// Ajuste de Fade (segundos, 0 = apagado).
+    pub fn set_fade(&mut self, secs: f32) {
+        self.fade_secs = secs.clamp(0.0, 15.0);
+    }
+
     /// Petición de búsqueda encolada desde fuera del hilo de audio.
     pub fn request_seek(&mut self, secs: f64) {
         self.cmds.push_back(EngineCmd::Seek(secs));
@@ -588,7 +599,8 @@ impl Core {
         // ganancia al final del bloque: entre una y otra se interpola muestra
         // a muestra, así un cambio de normalización se desliza (~0,5 s)
         let mut gain_end = 1.0f32;
-        let mut fade_secs = 0.0f32;
+        let mut fade_in = 0.0f32;
+        let mut fade_out = 0.0f32;
         let mut cur_dur: Option<f64> = None;
         if let Some(t) = &mut cur {
             if t.state == PlayState::Playing {
@@ -597,16 +609,17 @@ impl Core {
                 gain_lin = t.gain_lin;
                 gain_end = glide_gain(t.gain_lin, t.gain_target, frames, or);
                 t.gain_lin = gain_end;
-                fade_secs = t.fade_secs;
+                fade_in = t.fade_in_secs;
+                fade_out = t.fade_out_secs;
                 cur_dur = t.dur;
                 render_pull(self, 0, t, &mut scr[..frames * 2], frames, true);
             }
         }
         // ¿ventana de crossfade? queda menos fade+buffer de pista y hay preparada
         let xfade = next.is_some()
-            && fade_secs > 0.0
+            && fade_out > 0.0
             && cur_dur
-                .map(|d| d - buf_start <= fade_secs as f64 + frames as f64 / or)
+                .map(|d| d - buf_start <= fade_out as f64 + frames as f64 / or)
                 .unwrap_or(false);
         if xfade {
             if let Some(n) = next.as_mut() {
@@ -621,7 +634,7 @@ impl Core {
             // mezcla equal-power (potencia constante): sqrt(x) y sqrt(1-x)
             // evitan la caída de sonoridad perceptible de la mezcla lineal
             let g_next = next.as_ref().map(|n| n.gain_lin).unwrap_or(1.0);
-            let fs = fade_secs as f64;
+            let fs = fade_out as f64;
             let end = cur_dur.unwrap_or(0.0);
             for f in 0..frames {
                 let t = buf_start + f as f64 / or;
@@ -635,27 +648,25 @@ impl Core {
         } else {
             // envolvente de entrada/salida (fade) + ganancia relativa de la pista
             let track_dur = cur_dur;
-            let near_start = fade_secs > 0.0 && buf_start < fade_secs as f64;
-            let near_end = match (fade_secs, track_dur) {
+            let near_start = fade_in > 0.0 && buf_start < fade_in as f64;
+            let near_end = match (fade_out, track_dur) {
                 (fs, Some(d)) if fs > 0.0 => buf_start > d - fs as f64,
                 _ => false,
             };
             if gain_lin != 1.0 || gain_end != 1.0 || near_start || near_end {
                 for f in 0..frames {
                     let mut g = gain_lin + (gain_end - gain_lin) * (f as f32 / frames as f32);
-                    if fade_secs > 0.0 {
-                        let t = buf_start + f as f64 / or;
-                        let fs = fade_secs as f64;
-                        // fundido de entrada
-                        if t < fs {
-                            g *= (t / fs).clamp(0.0, 1.0) as f32;
-                        }
-                        // fundido de salida (C3): último tramo de la pista
-                        if let Some(d) = track_dur {
-                            let rem = d - t;
-                            if rem < fs {
-                                g *= (rem.max(0.0) / fs).clamp(0.0, 1.0) as f32;
-                            }
+                    let t = buf_start + f as f64 / or;
+                    // fundido de entrada
+                    if fade_in > 0.0 && t < fade_in as f64 {
+                        g *= (t / fade_in as f64).clamp(0.0, 1.0) as f32;
+                    }
+                    // fundido de salida (C3): último tramo de la pista
+                    if let (true, Some(d)) = (fade_out > 0.0, track_dur) {
+                        let fs = fade_out as f64;
+                        let rem = d - t;
+                        if rem < fs {
+                            g *= (rem.max(0.0) / fs).clamp(0.0, 1.0) as f32;
                         }
                     }
                     scr[f * 2] *= g;
@@ -1458,7 +1469,7 @@ impl Player {
 
     pub fn set_fade(&self, secs: f32) {
         if let Ok(mut c) = self.core.lock() {
-            c.fade_secs = secs.clamp(0.0, 15.0);
+            c.set_fade(secs);
         }
     }
 
@@ -1768,6 +1779,163 @@ mod tests {
         );
         let _ = std::fs::remove_file(&wa);
         let _ = std::fs::remove_file(&wb);
+    }
+
+    /// Bug 2026-11-21 (cierre del Sprint 4): la pista se cargó con Fade en 0
+    /// y el usuario lo subió a mitad de canción. La UI preparaba la siguiente,
+    /// pero la pista en curso conservaba el fade de cuando se cargó (0), así
+    /// que nunca abría la ventana de crossfade: acababa, el motor se quedaba
+    /// parado y la UI volvía a lanzar la preparada desde 0 con `play`.
+    #[test]
+    fn fade_raised_mid_track_still_crossfades_into_primed() {
+        let wa = std::env::temp_dir().join("enn-xfade-late-a.wav");
+        let wb = std::env::temp_dir().join("enn-xfade-late-b.wav");
+        write_sine_wav(&wa, 4, 440.0);
+        write_sine_wav(&wb, 4, 880.0);
+
+        let core = Arc::new(Mutex::new(Core::new(48000, 2)));
+        {
+            let (dec, opened) = crate::decode::Decoder::open(&wa).expect("abrir wav a");
+            let dur = duration_of(&opened);
+            let mut c = core.lock().unwrap();
+            c.set_fade(0.0); // Fade apagado al empezar la canción
+            c.cmds.push_back(EngineCmd::Play {
+                dec,
+                path: wa.clone(),
+                tags: Default::default(),
+                dur,
+                gain_db: 0.0,
+            });
+        }
+        let mut buf = vec![0.0f32; 480 * 2];
+        // 1 s sonando: lejos del principio y del final
+        for _ in 0..100 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+        }
+        // a mitad de canción el usuario sube el Fade a 1 s
+        core.lock().unwrap().set_fade(1.0);
+        // 1 s más y la UI prepara la siguiente (le quedan ~2 s)
+        for _ in 0..100 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+        }
+        {
+            let (dec, opened) = crate::decode::Decoder::open(&wb).expect("abrir wav b");
+            let dur = duration_of(&opened);
+            core.lock().unwrap().cmds.push_back(EngineCmd::Prime {
+                dec,
+                path: wb.clone(),
+                tags: Default::default(),
+                dur,
+                gain_db: 0.0,
+            });
+        }
+        let mut promoted = false;
+        let mut went_idle = false;
+        for _ in 0..400 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+            let c = core.lock().unwrap();
+            let cur = c.cur.as_ref().unwrap();
+            if cur.path == wb {
+                promoted = true;
+                break;
+            }
+            if cur.state == PlayState::Idle {
+                went_idle = true;
+                break;
+            }
+        }
+        assert!(
+            !went_idle,
+            "la pista A acabó y el motor se quedó parado con la B preparada"
+        );
+        assert!(promoted, "la pista B debería haber tomado el mando");
+        let _ = std::fs::remove_file(&wa);
+        let _ = std::fs::remove_file(&wb);
+    }
+
+    /// Si la pista acaba con una preparada esperando pero sin ventana de
+    /// crossfade (p. ej. el Fade se subió en sus últimos segundos), la
+    /// preparada entra igual, sin hueco: antes el motor se quedaba parado.
+    #[test]
+    fn primed_track_takes_over_even_without_a_crossfade_window() {
+        let wa = std::env::temp_dir().join("enn-xfade-gapless-a.wav");
+        let wb = std::env::temp_dir().join("enn-xfade-gapless-b.wav");
+        write_sine_wav(&wa, 2, 440.0);
+        write_sine_wav(&wb, 2, 880.0);
+        let core = Arc::new(Mutex::new(Core::new(48000, 2)));
+        for (p, play) in [(&wa, true), (&wb, false)] {
+            let (dec, opened) = crate::decode::Decoder::open(p).expect("abrir wav");
+            let dur = duration_of(&opened);
+            let (path, tags) = (p.to_path_buf(), Default::default());
+            core.lock().unwrap().cmds.push_back(if play {
+                EngineCmd::Play { dec, path, tags, dur, gain_db: 0.0 }
+            } else {
+                EngineCmd::Prime { dec, path, tags, dur, gain_db: 0.0 }
+            });
+        }
+        let mut buf = vec![0.0f32; 480 * 2];
+        let mut promoted = false;
+        for _ in 0..400 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+            let c = core.lock().unwrap();
+            let cur = c.cur.as_ref().unwrap();
+            if cur.path == wb {
+                promoted = true;
+                assert_eq!(cur.state, PlayState::Playing);
+                assert_eq!(c.pending_event, Some("track"), "la UI ve el cambio, no un final");
+                break;
+            }
+            assert_ne!(cur.state, PlayState::Idle, "se quedó parado con la B preparada");
+        }
+        assert!(promoted, "la pista B debería haber tomado el mando");
+        let _ = std::fs::remove_file(&wa);
+        let _ = std::fs::remove_file(&wb);
+    }
+
+    /// Subir el Fade a mitad de canción no debe tocar su fundido de entrada
+    /// (sería un bajón de volumen repentino) ni un fundido de salida que ya
+    /// esté en marcha.
+    #[test]
+    fn fade_change_never_jumps_the_current_envelope() {
+        let wa = std::env::temp_dir().join("enn-xfade-env.wav");
+        write_sine_wav(&wa, 4, 440.0);
+        let core = Arc::new(Mutex::new(Core::new(48000, 2)));
+        {
+            let (dec, opened) = crate::decode::Decoder::open(&wa).expect("abrir wav");
+            let dur = duration_of(&opened);
+            let mut c = core.lock().unwrap();
+            c.set_fade(0.0);
+            c.cmds.push_back(EngineCmd::Play {
+                dec,
+                path: wa.clone(),
+                tags: Default::default(),
+                dur,
+                gain_db: 0.0,
+            });
+        }
+        let mut buf = vec![0.0f32; 480 * 2];
+        // 0,5 s: con un Fade nuevo de 2 s estaría «dentro» del fundido de entrada
+        for _ in 0..50 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+        }
+        core.lock().unwrap().set_fade(2.0);
+        {
+            let c = core.lock().unwrap();
+            let t = c.cur.as_ref().unwrap();
+            assert_eq!(t.fade_in_secs, 0.0, "el fundido de entrada no cambia");
+            assert_eq!(t.fade_out_secs, 2.0, "el de salida sí: queda lejos");
+        }
+        // ya en los últimos 2 s (fundido de salida en marcha): no se toca
+        for _ in 0..200 {
+            core.lock().unwrap().render_into::<f32>(&mut buf);
+        }
+        core.lock().unwrap().set_fade(0.0);
+        assert_eq!(
+            core.lock().unwrap().cur.as_ref().unwrap().fade_out_secs,
+            2.0,
+            "un fundido de salida en marcha no salta"
+        );
+        let _ = std::fs::remove_file(&wa);
     }
 
     /// ADR #93: el anillo de análisis va `lookahead_s()` por delante de lo
